@@ -317,7 +317,7 @@ function setupProjectCarousel(){
  const dots=ui.querySelector('.project-carousel-dots');
  dots.innerHTML=cards.map((_,i)=>'<button type="button" aria-label="Proje '+(i+1)+'" data-dot="'+i+'"></button>').join('');
  let active=0;
- const setActive=(i,move=false)=>{if(!cards.length)return;active=(i+cards.length)%cards.length;cards.forEach((c,n)=>c.classList.toggle('is-active',n===active));[...dots.children].forEach((d,n)=>d.setAttribute('aria-current',n===active?'true':'false'));if(move)cards[active].scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest',inline:'center'});};
+ const setActive=(i,move=false)=>{if(!cards.length)return;active=(i+cards.length)%cards.length;cards.forEach((c,n)=>c.classList.toggle('is-active',n===active));[...dots.children].forEach((d,n)=>d.setAttribute('aria-current',n===active?'true':'false'));if(move){const c=cards[active],left=c.getBoundingClientRect().left-gallery.getBoundingClientRect().left-(gallery.clientWidth-c.clientWidth)/2;gallery.scrollTo({left:gallery.scrollLeft+left,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}};
  ui.querySelector('.pc-prev').onclick=()=>setActive(active-1,true);
  ui.querySelector('.pc-next').onclick=()=>setActive(active+1,true);
  dots.onclick=e=>{const b=e.target.closest('[data-dot]');if(b)setActive(+b.dataset.dot,true);};
