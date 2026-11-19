@@ -313,7 +313,7 @@ function setupProjectCarousel(){
  const gallery=$('#gallery'); if(!gallery)return;
  let ui=$('#projectCarouselUI');
  if(!ui){ui=document.createElement('div');ui.id='projectCarouselUI';ui.className='project-carousel-ui';ui.innerHTML='<button type="button" class="pc-prev" aria-label="Önceki proje">‹</button><div class="project-carousel-dots" aria-label="Proje seçimi"></div><button type="button" class="pc-next" aria-label="Sonraki proje">›</button>';gallery.insertAdjacentElement('afterend',ui);}
- const cards=$('.card[data-p]');
+ const cards=[...gallery.querySelectorAll('.card[data-p]')];
  const dots=ui.querySelector('.project-carousel-dots');
  dots.innerHTML=cards.map((_,i)=>'<button type="button" aria-label="Proje '+(i+1)+'" data-dot="'+i+'"></button>').join('');
  let active=0;
@@ -328,7 +328,7 @@ function setupProjectCarousel(){
  setActive(0,false);
 }
 function setupCvCard(){
- const links=$('#cl a');if(!links.length)return;
+ const links=[...$('#cl').querySelectorAll('a')];if(!links.length)return;
  const cv=links[links.length-1];if(!cv)return;
  let card=$('#cvDownloadCard');
  if(!card){card=document.createElement('div');card.id='cvDownloadCard';card.className='cv-download-card';cv.parentNode.insertBefore(card,cv);card.innerHTML='<span class="cv-kicker">PERSONAL DOCUMENT / PDF</span><strong class="cv-title">Curriculum Vitae</strong><span class="cv-note">Eğitim, deneyim ve teknik yetkinliklerime göz atın.</span>';card.appendChild(cv);}
