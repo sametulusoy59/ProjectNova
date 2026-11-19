@@ -195,6 +195,47 @@ h2{letter-spacing:-.01em}
 #projects .card:hover,#projects .card:focus-visible{border-color:#a06bff;box-shadow:0 14px 44px -12px rgba(160,107,255,.55)}
 @media(prefers-reduced-motion:reduce){#scan,#cue i{animation:none}.orb::after{animation:none}.reveal{opacity:1;transform:none;transition:none}.card{transition:none}}
 .orb img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* NOVA PROJECT CAROUSEL + CV PANEL */
+#projects .gallery{
+  display:flex;align-items:stretch;gap:1.15rem;overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x mandatory;scroll-behavior:smooth;overscroll-behavior-x:contain;
+  scrollbar-width:none;padding:1rem max(1rem,calc((100% - 760px)/2)) 1.6rem;
+  -webkit-overflow-scrolling:touch;
+}
+#projects .gallery::-webkit-scrollbar{display:none}
+#projects .gallery .card{
+  flex:0 0 min(760px,78%);width:min(760px,78%);scroll-snap-align:center;
+  opacity:.68;transform:scale(.965);transition:opacity .35s,transform .35s,border-color .35s,box-shadow .35s;
+}
+#projects .gallery .card.is-active{opacity:1;transform:scale(1);border-color:rgba(160,107,255,.8);box-shadow:0 18px 55px -24px rgba(160,107,255,.65),0 0 24px -12px rgba(0,217,255,.5)}
+#projects .gallery .card .orb{aspect-ratio:16/8.8}
+.project-carousel-ui{display:flex;align-items:center;justify-content:center;gap:1rem;margin:.25rem auto 0}
+.project-carousel-ui button{display:grid;place-items:center;width:2.65rem;height:2.65rem;border:1px solid rgba(160,107,255,.55);border-radius:50%;background:rgba(5,11,22,.72);color:#d9c7ff;font:400 1.25rem var(--mono);cursor:pointer;transition:background .25s,box-shadow .25s,transform .25s}
+.project-carousel-ui button:hover{background:rgba(160,107,255,.18);box-shadow:0 0 22px -5px #a06bff;transform:translateY(-2px)}
+.project-carousel-dots{display:flex;align-items:center;justify-content:center;gap:.5rem}
+.project-carousel-dots button{width:7px;height:7px;padding:0;border:0;background:rgba(145,164,188,.38);transition:width .25s,background .25s;cursor:pointer}
+.project-carousel-dots button[aria-current="true"]{width:24px;border-radius:8px;background:#b99aff;box-shadow:0 0 12px rgba(160,107,255,.65)}
+#cl{align-items:center}
+.cv-download-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:.65rem;min-width:min(290px,100%);max-width:380px;padding:1.25rem 1.4rem;border:1px solid rgba(0,217,255,.42);border-left:2px solid var(--cyan);background:linear-gradient(135deg,rgba(0,136,255,.14),rgba(5,11,22,.78) 60%,rgba(160,107,255,.1));box-shadow:inset 0 1px rgba(255,255,255,.06),0 12px 42px -25px rgba(0,217,255,.7);backdrop-filter:blur(12px);text-align:left}
+.cv-download-card::before{content:"";position:absolute;inset:5px;border:1px solid rgba(0,217,255,.09);pointer-events:none}
+.cv-download-card .cv-kicker{font:400 .62rem var(--mono);letter-spacing:.18em;color:var(--cyan)}
+.cv-download-card .cv-title{font:600 1.05rem var(--disp);color:var(--ice)}
+.cv-download-card .cv-note{font:400 .78rem/1.5 var(--body);color:var(--mut)}
+.cv-download-card a{display:inline-flex;align-items:center;gap:.65rem;margin-top:.25rem;padding:.68rem 1rem;border:1px solid rgba(0,217,255,.6);background:rgba(0,217,255,.1);color:var(--ice);font:400 .72rem var(--mono);letter-spacing:.08em;text-decoration:none;transition:background .25s,box-shadow .25s,transform .25s}
+.cv-download-card a:hover{background:rgba(0,217,255,.2);box-shadow:0 0 24px -5px var(--cyan);transform:translateY(-2px)}
+@media(max-width:767px){
+ #projects .gallery{flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;padding:1rem .15rem 1.4rem}
+ #projects .gallery .card{flex:0 0 88%;width:88%;opacity:.82}
+ #projects .gallery .card.is-active{opacity:1}
+ #projects .gallery .card .orb{aspect-ratio:16/10}
+ .project-carousel-ui{gap:.75rem}
+ .cv-download-card{min-width:100%;max-width:100%;align-items:center;text-align:center}
+}
+@media(prefers-reduced-motion:reduce){
+ #projects .gallery{scroll-behavior:auto}
+ #projects .gallery .card,.project-carousel-ui button,.cv-download-card a{transition:none}
+}
 </style>
 <!--NOVA_HEAD-->
 </head>
@@ -267,6 +308,33 @@ return `<svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hid
 function worldSVG(h,s){const st=[[30,40],[270,30],[60,170],[290,150],[20,120],[300,60],[120,20],[200,180]].map(([x,y],k)=>`<circle cx="${x+s*7%20}" cy="${y}" r="${k%3?.8:1.3}" fill="#fff" opacity="${.4+k%3*.25}"/>`).join('');const rot=-25+s*18;
 return `<svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><radialGradient id="g${s}" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="hsl(${h} 100% 82%)"/><stop offset=".5" stop-color="hsl(${h} 90% 46%)"/><stop offset="1" stop-color="hsl(${h+25} 80% 10%)"/></radialGradient><linearGradient id="d${s}" x1="0" y1="0" x2="1" y2="1"><stop offset=".4" stop-color="#02040A" stop-opacity="0"/><stop offset="1" stop-color="#02040A" stop-opacity=".85"/></linearGradient><radialGradient id="a${s}"><stop offset=".78" stop-color="hsl(${h} 100% 70%)" stop-opacity="0"/><stop offset="1" stop-color="hsl(${h} 100% 75%)" stop-opacity=".55"/></radialGradient><clipPath id="c${s}"><circle cx="160" cy="100" r="60"/></clipPath><filter id="t${s}" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".01 .07" numOctaves="3" seed="${s+4}"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.8 -.6"/></filter></defs><rect width="320" height="200" fill="#02040A"/><circle cx="160" cy="100" r="95" fill="hsl(${h} 100% 50%)" opacity=".1"/>${st}<g transform="rotate(${rot} 160 100)"><path d="M32 100A128 24 0 0 1 288 100" fill="none" stroke="hsl(${h} 100% 75%)" stroke-opacity=".5"/></g><circle cx="160" cy="100" r="60" fill="url(#g${s})"/><g clip-path="url(#c${s})"><rect x="100" y="40" width="120" height="120" filter="url(#t${s})" opacity=".35"/></g><circle cx="160" cy="100" r="60" fill="url(#d${s})"/><circle cx="160" cy="100" r="60" fill="url(#a${s})"/><g transform="rotate(${rot} 160 100)"><path d="M32 100A128 24 0 0 0 288 100" fill="none" stroke="hsl(${h} 100% 80%)" stroke-opacity=".8" stroke-width="1.5"/><circle cx="262" cy="118" r="4.5" fill="hsl(${h} 100% 88%)"/></g></svg>`}
 function link(url,label,pre){return url?`<a href="${esc(pre||'')}${esc(url)}" target="_blank" rel="noopener noreferrer">${label} ↗</a>`:`<span aria-disabled="true">${label} — ${X('notset')}</span>`}
+
+function setupProjectCarousel(){
+ const gallery=$('#gallery'); if(!gallery)return;
+ let ui=$('#projectCarouselUI');
+ if(!ui){ui=document.createElement('div');ui.id='projectCarouselUI';ui.className='project-carousel-ui';ui.innerHTML='<button type="button" class="pc-prev" aria-label="Önceki proje">‹</button><div class="project-carousel-dots" aria-label="Proje seçimi"></div><button type="button" class="pc-next" aria-label="Sonraki proje">›</button>';gallery.insertAdjacentElement('afterend',ui);}
+ const cards=$('.card[data-p]');
+ const dots=ui.querySelector('.project-carousel-dots');
+ dots.innerHTML=cards.map((_,i)=>'<button type="button" aria-label="Proje '+(i+1)+'" data-dot="'+i+'"></button>').join('');
+ let active=0;
+ const setActive=(i,move=false)=>{if(!cards.length)return;active=(i+cards.length)%cards.length;cards.forEach((c,n)=>c.classList.toggle('is-active',n===active));[...dots.children].forEach((d,n)=>d.setAttribute('aria-current',n===active?'true':'false'));if(move)cards[active].scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest',inline:'center'});};
+ ui.querySelector('.pc-prev').onclick=()=>setActive(active-1,true);
+ ui.querySelector('.pc-next').onclick=()=>setActive(active+1,true);
+ dots.onclick=e=>{const b=e.target.closest('[data-dot]');if(b)setActive(+b.dataset.dot,true);};
+ if('IntersectionObserver' in window){
+  const obs=new IntersectionObserver(entries=>{let best=null;for(const entry of entries)if(entry.isIntersecting&&(!best||entry.intersectionRatio>best.intersectionRatio))best=entry;if(best)setActive(cards.indexOf(best.target),false);},{root:gallery,threshold:[.35,.55,.7,.85]});
+  cards.forEach(c=>obs.observe(c));
+ }else gallery.addEventListener('scroll',()=>{let nearest=0,dist=Infinity;cards.forEach((c,i)=>{const d=Math.abs(c.getBoundingClientRect().left-gallery.getBoundingClientRect().left);if(d<dist){dist=d;nearest=i;}});setActive(nearest,false);},{passive:true});
+ setActive(0,false);
+}
+function setupCvCard(){
+ const links=$('#cl a');if(!links.length)return;
+ const cv=links[links.length-1];if(!cv)return;
+ let card=$('#cvDownloadCard');
+ if(!card){card=document.createElement('div');card.id='cvDownloadCard';card.className='cv-download-card';cv.parentNode.insertBefore(card,cv);card.innerHTML='<span class="cv-kicker">PERSONAL DOCUMENT / PDF</span><strong class="cv-title">Curriculum Vitae</strong><span class="cv-note">Eğitim, deneyim ve teknik yetkinliklerime göz atın.</span>';card.appendChild(cv);}
+ cv.classList.add('cv-download-link');
+}
+
 function render(){
  document.documentElement.lang=lang;updSnd();
  $$('[data-i]').forEach(e=>e.textContent=X(e.dataset.i));
@@ -278,6 +346,7 @@ function render(){
  $('#expBody').innerHTML=DATA.exp.map(e=>`<li><span class="meta">${esc(e.period)}</span><div><b>${esc(L(e.role))}</b><p class="meta" style="margin:.2rem 0">${esc(e.org)}</p><p class="mut" style="margin:.4rem 0 0">${esc(L(e.desc))}</p></div></li>`).join('');
  const c=DATA.contact;
  $('#cl').innerHTML=link(c.email,X('email'),'mailto:')+link(c.github,'GitHub')+link(c.linkedin,'LinkedIn')+link(c.cv,X('cv'));
+ setupProjectCarousel();setupCvCard();
  $$('.card').forEach(b=>{b.onclick=()=>openP3(+b.dataset.p,b);b.onpointerenter=b.onfocus=()=>pull(1);b.onpointerleave=b.onblur=()=>pull(0)});
  $$('.reveal').forEach(e=>io.observe(e));
  $('#term').textContent=termShown?I18N[lang].boot.join('\n'):$('#term').textContent;
