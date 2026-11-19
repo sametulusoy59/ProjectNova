@@ -1,0 +1,13 @@
+{
+  "name": "project-nova",
+  "version": "0.3.0",
+  "private": true,
+  "description": "PROJECT NOVA public site + NOVA COMMAND CENTER (zero-dependency Node backend)",
+  "scripts": {
+    "start": "node server.js",
+    "build": "node scripts/check-node.js"
+  },
+  "main": "server.js",
+  "dependencies": {},
+  "devDependencies": {}
+}
