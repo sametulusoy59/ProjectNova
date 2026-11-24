@@ -38,7 +38,7 @@
       if (card) return ev('project_click', { el: 'project:' + slug(card.dataset.p), cat: 'project' });
       if (cn) return ev('nav_click', { el: 'world:' + (cn.getAttribute('href') || '').slice(1), cat: 'world' });
       if (a && a.closest('nav,#idx')) return ev('nav_click', { el: 'nav:' + (a.getAttribute('href') || '').slice(1), cat: 'nav' });
-      if (a && a.closest('.cl')) { const i = [...a.parentNode.children].indexOf(a); return ev(i === 3 ? 'cv_download' : 'contact_click', { el: 'contact:' + ['email', 'github', 'linkedin', 'cv'][i], cat: 'contact' }); }
+      if (a && a.closest('.cl')) { const k = a.dataset.k || 'link'; return ev(k === 'cv' ? 'cv_download' : 'contact_click', { el: 'contact:' + k, cat: 'contact' }); }
       if (a && a.closest('dialog')) return ev('link_click', { el: 'project-link:' + (/Source|Kaynak/.test(a.textContent) ? 'code' : 'live'), cat: 'project' });
       if (a && a.target === '_blank') return ev('link_click', { el: 'ext:' + a.hostname, cat: 'external' });
       if (b) { if (b.id === 'lang') setTimeout(() => ev('lang_switch', { el: 'lang:' + L(), cat: 'cta' }), 0); else if (['skip', 'topBtn', 'snd', 'dN', 'dP', 'dX'].includes(b.id)) ev('cta_click', { el: 'cta:' + b.id, cat: 'cta' }); }

@@ -31,3 +31,5 @@ fieldset{border:1px solid rgba(255,255,255,.1);border-left:2px solid var(--cy);m
 .fun{display:grid;grid-template-columns:150px 1fr 120px;gap:.6rem;align-items:center;margin:.3rem 0;font-size:.85rem}.fun .bar{height:18px}
 canvas.heat{width:100%;max-width:760px;aspect-ratio:16/9;background:#02060f;border:1px solid rgba(0,217,255,.3);display:block}select{background:#02060f;color:var(--ice);border:1px solid rgba(145,164,188,.3);padding:.4rem .6rem;font:inherit;border-radius:2px}
 code,.key{font-family:ui-monospace,Menlo,Consolas,monospace;background:#02060f;padding:.1rem .4rem;word-break:break-all}.key{display:block;padding:.6rem;margin:.5rem 0}
+
+.pdfbox{height:130px;display:grid;place-items:center;border:1px dashed var(--cy);color:var(--cy);font:700 1.4rem ui-monospace,Menlo,monospace;margin-bottom:.5rem;background:#02060f}

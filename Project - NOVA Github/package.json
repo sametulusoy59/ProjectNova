@@ -5,7 +5,8 @@
   "description": "PROJECT NOVA public site + NOVA COMMAND CENTER (zero-dependency Node backend)",
   "scripts": {
     "start": "node server.js",
-    "build": "node scripts/check-node.js"
+    "build": "node scripts/check-node.js",
+    "test": "node --test --no-warnings test/*.test.js"
   },
   "main": "server.js",
   "dependencies": {},

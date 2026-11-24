@@ -1,7 +1,7 @@
 'use strict';
 VIEWS['Medya'] = async el => {
-  const list = h('div', { class: 'grid' }), input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', multiple: '', 'aria-label': 'Görsel yükle' });
-  const zone = h('div', { class: 'drop' }, 'Görselleri buraya sürükleyin ya da seçin (PNG, JPG, WEBP · en fazla 5 MB)', h('br'), input);
+  const list = h('div', { class: 'grid' }), input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,application/pdf', multiple: '', 'aria-label': 'Görsel yükle' });
+  const zone = h('div', { class: 'drop' }, 'Görselleri veya CV PDF\'inizi buraya sürükleyin ya da seçin (PNG, JPG, WEBP, PDF · en fazla 5 MB)', h('br'), input);
   async function upload(files) {
     for (const file of files) {
       try { if (file.size > 5 * 1048576) throw new Error('too_large'); await api('/media', { raw: file, headers: { 'content-type': 'application/octet-stream', 'x-filename': encodeURIComponent(file.name) } }); toast(file.name + ' yüklendi.'); }
@@ -18,7 +18,7 @@ VIEWS['Medya'] = async el => {
     list.replaceChildren(...(rows.length ? rows.map(r => {
       const alt = h('input', { type: 'text', value: r.alt, placeholder: 'Alt metin (erişilebilirlik)', 'aria-label': 'Alt metin', maxlength: 300 });
       alt.addEventListener('change', async () => { try { await api('/media/' + r.id, { method: 'PATCH', body: { alt: alt.value } }); toast('Alt metin kaydedildi.'); } catch (e) { toast(msg(e), true); } });
-      return h('div', { class: 'mcard' }, h('img', { src: '/media/' + r.file, alt: r.alt || r.name, loading: 'lazy' }), h('small', {}, `${r.name} · ${r.w}×${r.h} · ${kb(r.size)}`), h('div', {}, h('span', { class: 'chip ' + (r.used ? 'on' : '') }, r.used ? 'kullanımda' : 'kullanılmıyor')), alt,
+      return h('div', { class: 'mcard' }, (r.mime === 'application/pdf' ? h('div', { class: 'pdfbox' }, 'PDF') : h('img', { src: '/media/' + r.file, alt: r.alt || r.name, loading: 'lazy' })), h('small', {}, `${r.name}${r.w ? ` · ${r.w}×${r.h}` : ''} · ${kb(r.size)}`), h('div', {}, h('span', { class: 'chip ' + (r.used ? 'on' : '') }, r.used ? 'kullanımda' : 'kullanılmıyor')), alt,
         h('div', { class: 'row' }, h('button', { class: 'sm', onclick: async () => { try { await navigator.clipboard.writeText(location.origin + '/media/' + r.file); toast('Bağlantı kopyalandı.'); } catch { toast('/media/' + r.file); } } }, 'URL kopyala'),
           h('button', { class: 'sm danger', onclick: async () => {
             if (!confirm('Bu görsel silinsin mi?')) return;

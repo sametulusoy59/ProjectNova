@@ -1,10 +1,12 @@
 'use strict';
-let DatabaseSync;
-try { ({ DatabaseSync } = require('node:sqlite')); }
-catch { console.error(`[nova] This server needs Node.js 22.13 or newer (found ${process.version}). In your host's Node.js settings choose Node 22.x (latest) or 24.x.`); process.exit(1); }
+function sqlite() {
+  try { return require('node:sqlite'); }
+  catch { const e = new Error(`Node.js 22.13 or newer is required (found ${process.version})`); e.code = 'NOVA_NODE_VERSION'; throw e; }
+}
 const fs = require('node:fs'), path = require('node:path');
 
 function open(dir) {
+  const { DatabaseSync } = sqlite();
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path.join(dir, 'nova.db'));
   db.exec(`

@@ -13,16 +13,22 @@ const PERM = { owner: ['content', 'analytics', 'audit', 'security'], editor: ['c
 const FUNNEL_DEFAULT = [{ label: 'Ziyaret', name: 'session_start' }, { label: 'Hakkında bölümü', name: 'section_view', section: 'about' }, { label: 'Projeler bölümü', name: 'section_view', section: 'projects' },
   { label: 'Proje tıklaması', name: 'project_click' }, { label: 'İletişim bölümü', name: 'section_view', section: 'contact' }, { label: 'İletişim / CV tıklaması', names: ['contact_click', 'cv_download'] }];
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml' };
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.pdf': 'application/pdf', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml', '.mjs': 'text/javascript; charset=utf-8', '.pfb': 'application/octet-stream', '.ttf': 'font/ttf' };
 // The public site uses inline scripts/styles + cdnjs + Google Fonts (see audit). Admin UI is strict: no inline code at all.
-const CSP_SITE = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
+const CSP_SITE = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
 const CSP_ADMIN = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
 const httpErr = (code, msg) => Object.assign(new Error(msg), { code });
 
+function defaultDataDir() {   // ./data if writable, otherwise ~/nova-data (some hosts mount the app folder read-only)
+  const local = path.join(__dirname, 'data');
+  try { fs.mkdirSync(local, { recursive: true }); fs.accessSync(local, fs.constants.W_OK); return local; }
+  catch { return path.join(require('node:os').homedir(), 'nova-data'); }
+}
+
 function createApp(opts = {}) {
   const cfg = {
-    dir: process.env.DATA_DIR || path.join(__dirname, 'data'), secure: process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true',
+    dir: process.env.DATA_DIR || defaultDataDir(), secure: process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true',
     origin: process.env.PUBLIC_ORIGIN || '', retentionDays: +process.env.ANALYTICS_RETENTION_DAYS || 90, sessionHours: +process.env.SESSION_HOURS || 12,
     idleMin: +process.env.SESSION_IDLE_MIN || 120, trustProxy: process.env.TRUST_PROXY === 'true', respectDnt: process.env.RESPECT_DNT !== 'false', maxUpload: (+process.env.MAX_UPLOAD_MB || 5) * 1048576, ...opts,
   };
@@ -40,7 +46,8 @@ function createApp(opts = {}) {
     const d = require('node:vm').runInNewContext('(' + m[1] + ')', {}, { timeout: 1000 });
     DEFAULTS = { site: { title: '', description: '', profile: d.profile, contact: d.contact }, projects: d.projects, skills: d.skills, experience: d.exp, theme: cleanTheme({}), seo: cleanSeo({}) };
   } catch (e) { console.error('[nova] could not extract site defaults:', e.message); }
-  function sniff(b) {   // real content-type detection by magic bytes (never trust the extension or header); SVG is deliberately NOT allowed
+  function sniff(b) {
+    if (b.length > 16 && b.toString('latin1', 0, 5) === '%PDF-') return { mime: 'application/pdf', ext: 'pdf', pdf: true };   // real content-type detection by magic bytes (never trust the extension or header); SVG is deliberately NOT allowed
     if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47 && b.toString('ascii', 12, 16) === 'IHDR') return { mime: 'image/png', ext: 'png', w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
     if (b[0] === 0xff && b[1] === 0xd8) {
       let i = 2;
@@ -291,7 +298,7 @@ function createApp(opts = {}) {
     else if (cfg.origin && !cfg.origin.startsWith('https://')) add('warn', 'PUBLIC_ORIGIN https:// ile başlamıyor.');
     if (!seo.ogImage) add('warn', 'Sosyal paylaşım görseli (og:image) seçilmemiş.');
     if (seo.robots === 'noindex') add('warn', 'Arama motorlarına kapalı (noindex) — yayına çıkarken "index" yapın.');
-    const noAlt = one("SELECT COUNT(*) n FROM media WHERE alt=''").n; if (noAlt) add('warn', `${noAlt} medya dosyasının alt metni boş.`);
+    const noAlt = one("SELECT COUNT(*) n FROM media WHERE alt='' AND mime LIKE 'image/%'").n; if (noAlt) add('warn', `${noAlt} medya dosyasının alt metni boş.`);
     const pAlt = projects.filter(p => p && p.image && !p.imageAlt).length; if (pAlt) add('warn', `${pAlt} projenin kapak görselinde alt metin yok.`);
     const noLink = projects.filter(p => p && !p.hidden && !p.live && !p.code).length; if (noLink) add('info', `${noLink} projede ne canlı demo ne kaynak kod bağlantısı var.`);
     if (!out.some(x => x.level === 'warn')) add('ok', 'Temel SEO kontrolleri temiz.');
@@ -396,13 +403,13 @@ function createApp(opts = {}) {
         const s = guard(req, res, 'content', true); if (!s) return;
         const buf = await raw(req, cfg.maxUpload), info = sniff(buf);
         if (!info) return json(res, 415, { error: 'unsupported_file' });
-        if (!info.w || !info.h || info.w > 12000 || info.h > 12000) return json(res, 422, { error: 'bad_dimensions' });
+        if (!info.pdf && (!info.w || !info.h || info.w > 12000 || info.h > 12000)) return json(res, 422, { error: 'bad_dimensions' });
         let name; try { name = decodeURIComponent(String(req.headers['x-filename'] || 'image')); } catch { name = 'image'; }
         name = name.replace(/[^\p{L}\p{N}._ -]/gu, '').slice(0, 80) || 'image';
         const file = S.rand(12) + '.' + info.ext; fs.writeFileSync(path.join(MEDIA, file), buf, { flag: 'wx', mode: 0o600 });
-        const r = run('INSERT INTO media(name,file,mime,size,w,h,alt,created_at,author) VALUES(?,?,?,?,?,?,?,?,?)', name, file, info.mime, buf.length, info.w, info.h, '', now(), s.username);
+        const r = run('INSERT INTO media(name,file,mime,size,w,h,alt,created_at,author) VALUES(?,?,?,?,?,?,?,?,?)', name, file, info.mime, buf.length, info.w ?? null, info.h ?? null, '', now(), s.username);
         audit(s.username, 'media_upload', file, 'success', { size: buf.length });
-        return json(res, 201, { id: Number(r.lastInsertRowid), name, file, mime: info.mime, size: buf.length, w: info.w, h: info.h, alt: '' });
+        return json(res, 201, { id: Number(r.lastInsertRowid), name, file, mime: info.mime, size: buf.length, w: info.w ?? null, h: info.h ?? null, alt: '' });
       }
       const mm = /^\/api\/admin\/media\/(\d{1,9})$/.exec(p);
       if (mm && (m === 'PATCH' || m === 'DELETE')) {
@@ -539,12 +546,17 @@ function createApp(opts = {}) {
       return json(res, 404, { error: 'not_found' });
     }
     if (m !== 'GET' && m !== 'HEAD') return json(res, 405, { error: 'method_not_allowed' });
-    const mf = /^\/media\/([A-Za-z0-9_-]{16}\.(?:png|jpg|webp))$/.exec(p);
+    const mf = /^\/media\/([A-Za-z0-9_-]{16}\.(?:png|jpg|webp|pdf))$/.exec(p);
     if (mf) {
       const f = path.join(MEDIA, mf[1]);
       return fs.stat(f, (e, st) => {
         if (e || !st.isFile()) return json(res, 404, { error: 'not_found' });
-        res.writeHead(200, { 'content-type': MIME['.' + mf[1].split('.')[1]], 'content-length': st.size, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox" });
+        const ext = mf[1].split('.')[1], hd = { 'content-type': MIME['.' + ext], 'content-length': st.size, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox" };
+        if (ext === 'pdf') {   // CV: always a download with a friendly file name
+          const row = one('SELECT name FROM media WHERE file=?', mf[1]); let nm = (row && row.name) || 'cv'; if (!/\.pdf$/i.test(nm)) nm += '.pdf';
+          hd['content-disposition'] = `attachment; filename="${nm.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '')}"; filename*=UTF-8''${encodeURIComponent(nm)}`;
+        }
+        res.writeHead(200, hd);
         req.method === 'HEAD' ? res.end() : fs.createReadStream(f).pipe(res);
       });
     }
@@ -578,11 +590,23 @@ function createApp(opts = {}) {
   });
   return { server, db, cfg, close() { clearInterval(timer); server.close(); server.closeAllConnections?.(); db.close(); } };
 }
+
 module.exports = { createApp };
 
-const app = createApp();
-const port = Number(process.env.PORT) || 3000;
-
-app.server.listen(port, '0.0.0.0', () => {
-  console.log(`[nova] listening on :${port} (site: / admin: /admin/)`);
-});
+// Startup. Hosts such as Hostinger/Passenger may LOAD this file instead of running it as the main script, so we start whenever it is loaded
+// (tests set NOVA_EMBEDDED=1 and call createApp themselves). If startup fails we still listen and show WHY instead of an opaque 503.
+function failurePage(port, e) {
+  console.error('[nova] STARTUP FAILED:', (e && e.stack) || e);
+  const code = String((e && (e.code || e.name)) || 'ERROR').replace(/[^A-Za-z0-9_ -]/g, '').slice(0, 40);
+  const dirHint = 'Veri klasörü oluşturulamıyor ya da yazılamıyor. DATA_DIR ortam değişkenine ana dizininizin altında yazılabilir, gerçek bir yol verin (örn. /home/u123456789/nova-data; "KULLANICI" yer tutucusunu değiştirmeyi unutmayın).';
+  const hints = { NOVA_NODE_VERSION: `Node.js sürümü yetersiz (şu an ${process.version}). Hosting panelinde Node.js sürümünü 22 (en yeni) veya 24 yapıp yeniden dağıtın.`, EACCES: dirHint, EPERM: dirHint, EROFS: dirHint, ENOENT: dirHint, ENOTDIR: dirHint };
+  const body = `<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>PROJECT NOVA — kurulum hatası</title><body style="font:16px system-ui;background:#02040A;color:#F4FBFF;max-width:640px;margin:10vh auto;padding:0 1rem"><h1 style="font-size:1.2rem">Sunucu başlatılamadı</h1><p>Hata kodu: <code>${code}</code></p><p>${hints[code] || 'Ayrıntı için hosting panelindeki Runtime Logs / günlük ekranına bakın.'}</p><p style="color:#91A4BC">Node ${process.version} · DATA_DIR ayarlı: ${process.env.DATA_DIR ? 'evet' : 'hayır'} · SETUP_TOKEN ayarlı: ${process.env.SETUP_TOKEN ? 'evet' : 'hayır'}</p>`;
+  http.createServer((req, res) => { res.writeHead(500, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(body); }).listen(port, '0.0.0.0');
+}
+if (!process.env.NOVA_EMBEDDED && !process.env.NODE_TEST_CONTEXT) {
+  const port = +process.env.PORT || 3000;
+  process.on('uncaughtException', e => console.error('[nova] uncaught:', e));
+  process.on('unhandledRejection', e => console.error('[nova] unhandled rejection:', e));
+  let app; try { app = createApp(); } catch (e) { failurePage(port, e); }
+  if (app) app.server.listen(port, '0.0.0.0', () => console.log(`[nova] listening on :${port}  (site: /  admin: /admin/)`));
+}

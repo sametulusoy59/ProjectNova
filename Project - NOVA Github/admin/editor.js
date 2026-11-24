@@ -36,11 +36,12 @@
   }
 
   const FORMS = {
-    site: (m, el) => {
+    site: (m, el, media = []) => {
       m.profile ||= {}; m.contact ||= {};
+      const pdfs = media.filter(x => x.mime === 'application/pdf'), pickCv = h('select', { onchange: ev => { if (ev.target.value) { m.contact.cv = '/media/' + ev.target.value; ctx.dirty(); ctx.reopen(); } } }, h('option', { value: '' }, pdfs.length ? 'Medya kütüphanesinden PDF seç…' : 'Kütüphanede PDF yok (Medya sayfasından yükleyin)'), pdfs.map(r => h('option', { value: r.file }, r.name)));
       el.append(h('h3', {}, 'Site bilgileri'), f('Sayfa başlığı (SEO)', m, 'title', { max: 120 }, 'Boşsa yerleşik başlık kullanılır'), f('Arama sonucu açıklaması (SEO)', m, 'description', { area: 1, max: 300 }),
         h('h3', {}, 'Hakkında'), f('Ad Soyad', m.profile, 'name', { max: 80 }), bi('Biyografi', m.profile, 'bio', { area: 1, rows: 5 }), biList('İlgi alanları', m.profile, 'interests'),
-        h('h3', {}, 'İletişim'), f('E-posta', m.contact, 'email', {}, 'Boş bırakırsanız düğme "ayarlanmadı" görünür'), f('GitHub bağlantısı (https://…)', m.contact, 'github'), f('LinkedIn bağlantısı (https://…)', m.contact, 'linkedin'), f('CV bağlantısı (https://… veya /media/…)', m.contact, 'cv'));
+        h('h3', {}, 'İletişim'), f('E-posta', m.contact, 'email', {}, 'Boş bırakırsanız düğme sitede gösterilmez'), f('GitHub bağlantısı (https://…)', m.contact, 'github'), f('LinkedIn bağlantısı (https://…)', m.contact, 'linkedin'), f('CV bağlantısı (https://… veya /media/…)', m.contact, 'cv', {}, 'Boş bırakırsanız CV düğmesi sitede gösterilmez'), lab('CV dosyası (PDF)', pickCv));
     },
     projects: (m, el, media) => el.append(listEditor(m, null, p => p.title && (p.title.tr || p.title.en), (p, redraw) => {
       const pick = h('select', { onchange: e => { const r = media.find(x => x.file === e.target.value); if (r) { p.image = '/media/' + r.file; p.imageAlt = r.alt || r.name; ctx.dirty(); redraw(); } } }, h('option', { value: '' }, 'Medya kütüphanesinden seç…'), media.map(r => h('option', { value: r.file }, r.name + ` (${r.w}×${r.h})`)));
@@ -84,7 +85,7 @@
 
   async function open(key, el) {
     await flush(); VIEWS._leave = flush;
-    const [doc, defs, media] = await Promise.all([api('/content/' + key), api('/defaults'), ['projects', 'seo'].includes(key) ? api('/media').catch(() => []) : []]);
+    const [doc, defs, media] = await Promise.all([api('/content/' + key), api('/defaults'), ['projects', 'seo', 'site'].includes(key) ? api('/media').catch(() => []) : []]);
     const model = doc.draft ?? clone(defs[key]), status = h('span', { class: 'st' }), chip = h('span', {});
     ctx = { key, model, version: doc.version, timer: 0, reopen: () => open(key, el) };
     const setChip = (live, pubver, ver) => { chip.className = 'chip ' + (live ? (pubver === ver ? 'on' : 'warn') : ''); chip.textContent = live ? (pubver === ver ? `Yayında (v${pubver})` : `Yayında v${pubver} · taslakta yayınlanmamış değişiklik var`) : 'Yayında değil — site yerleşik içeriği gösteriyor'; };
