@@ -366,12 +366,30 @@ function cvhBuild(){
 }
 function cvhText(){const tr=lang==='tr';$('#cvhT').textContent=(tr?'ÖZGEÇMİŞ // ':'PERSONNEL FILE // ')+DATA.profile.name;$('#cvhX').textContent=tr?'KAPAT [ESC]':'CLOSE [ESC]';$('#cvhD span').textContent=tr?'PDF olarak indir':'Download PDF'}
 function cvhMsg(t){const d=$('#cvhDoc');d.querySelectorAll('canvas,.holo-msg').forEach(n=>n.remove());const p=document.createElement('p');p.className='holo-msg';p.textContent=t;d.appendChild(p)}
-async function openCv(url){
+function cvLocal(h){   // same-origin PDF / image -> hologram; anything else (Drive, external sites) keeps the normal link
+ let u;try{u=new URL(h||'',location.href)}catch(e){return null}
+ const host=x=>x.replace(/^www\./,'');if(host(u.host)!==host(location.host))return null;
+ const path=u.pathname+u.search;if(/\.pdf$/i.test(u.pathname))return{url:path,kind:'pdf'};if(/\.(png|jpe?g|webp)$/i.test(u.pathname))return{url:path,kind:'img'};return null}
+function holoify(cv){const cx=cv.getContext('2d',{willReadFrequently:true}),im=cx.getImageData(0,0,cv.width,cv.height),p=im.data;   // paper -> transparent, ink -> glowing cyan/ice light
+ for(let i=0;i<p.length;i+=4){const l=(.299*p[i]+.587*p[i+1]+.114*p[i+2])/255;let k=Math.min(1,(1-l)*1.5);const w=k*k;
+  p[i]=Math.round(40+215*w);p[i+1]=Math.round(200+55*w);p[i+2]=255;p[i+3]=Math.round((18+237*k)*(p[i+3]/255))}
+ cx.putImageData(im,0,0)}
+function cvhShow(cv,n,total){const doc=$('#cvhDoc');doc.querySelectorAll('canvas,.holo-msg').forEach(x=>x.remove());doc.appendChild(cv);
+ if(!RM){doc.classList.remove('in');void doc.offsetWidth;doc.classList.add('in')}
+ $('#cvhPg').textContent=String(n).padStart(2,'0')+' / '+String(total).padStart(2,'0');$('#cvhP').disabled=n<=1;$('#cvhN').disabled=n>=total;
+ [$('#cvhP'),$('#cvhN'),$('#cvhPg')].forEach(x=>x.style.display=total>1?'':'none')}
+async function cvhImage(url,tok){const img=new Image();img.decoding='async';img.src=url;await img.decode();if(tok!==CVH.tok)return;
+ const st=$('#cvhStage'),fit=Math.min((st.clientHeight*.94)/img.naturalHeight,(st.clientWidth*.94)/img.naturalWidth),dpr=Math.min(devicePixelRatio||1,2);
+ const cv=document.createElement('canvas');cv.width=Math.max(1,Math.floor(img.naturalWidth*fit*dpr));cv.height=Math.max(1,Math.floor(img.naturalHeight*fit*dpr));cv.style.width=Math.floor(cv.width/dpr)+'px';cv.style.height=Math.floor(cv.height/dpr)+'px';
+ cv.setAttribute('role','img');cv.setAttribute('aria-label',lang==='tr'?'Özgeçmiş':'Résumé');
+ const cx=cv.getContext('2d',{willReadFrequently:true});cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(img,0,0,cv.width,cv.height);holoify(cv);CVH.doc=null;cvhShow(cv,1,1)}
+async function openCv(url,kind='pdf'){
  if(!CVH.el)cvhBuild();cvhText();CVH.url=url;CVH.ret=document.activeElement;const tok=++CVH.tok;
  $('#cvhD').href=url;$('#cvhPg').textContent='';$('#cvhP').disabled=$('#cvhN').disabled=true;
  CVH.el.classList.add('on');document.documentElement.style.overflow='hidden';$('#cvhX').focus();
  cvhMsg(lang==='tr'?'HOLOGRAM YÜKLENİYOR…':'PROJECTING HOLOGRAM…');try{Snd.ui(1)}catch(e){}
  try{
+  if(kind==='img'){await cvhImage(url,tok);return}
   if(!window.__pdfjs){window.__pdfjs=await import('/vendor/pdfjs/pdf.min.mjs');window.__pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.min.mjs'}
   if(!CVH.doc||CVH.doc.__url!==url){CVH.doc=await window.__pdfjs.getDocument({url,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',isEvalSupported:false}).promise;CVH.doc.__url=url}
   if(tok!==CVH.tok)return;await cvhGo(1,true);
@@ -384,14 +402,7 @@ async function cvhGo(n,first){
  const cv=document.createElement('canvas');cv.width=Math.floor(vp.width);cv.height=Math.floor(vp.height);cv.style.width=Math.floor(vp.width/dpr)+'px';cv.style.height=Math.floor(vp.height/dpr)+'px';
  cv.setAttribute('role','img');cv.setAttribute('aria-label',(lang==='tr'?'Özgeçmiş, sayfa ':'Résumé, page ')+n);
  const cx=cv.getContext('2d',{willReadFrequently:true});await page.render({canvasContext:cx,viewport:vp}).promise;if(tok!==CVH.tok)return;
- const im=cx.getImageData(0,0,cv.width,cv.height),p=im.data;   // paper -> transparent, ink -> glowing cyan/ice light
- for(let i=0;i<p.length;i+=4){const l=(.299*p[i]+.587*p[i+1]+.114*p[i+2])/255;let k=Math.min(1,(1-l)*1.5);const w=k*k;
-  p[i]=Math.round(40+215*w);p[i+1]=Math.round(200+55*w);p[i+2]=255;p[i+3]=Math.round(18+237*k)}
- cx.putImageData(im,0,0);
- const doc=$('#cvhDoc');doc.querySelectorAll('canvas,.holo-msg').forEach(x=>x.remove());doc.appendChild(cv);
- if(!RM){doc.classList.remove('in');void doc.offsetWidth;doc.classList.add('in')}
- $('#cvhPg').textContent=String(n).padStart(2,'0')+' / '+String(d.numPages).padStart(2,'0');$('#cvhP').disabled=n<=1;$('#cvhN').disabled=n>=d.numPages;
- const multi=d.numPages>1;[$('#cvhP'),$('#cvhN'),$('#cvhPg')].forEach(x=>x.style.display=multi?'':'none');
+ holoify(cv);cvhShow(cv,n,d.numPages);
 }
 function cvhClose(){if(!CVH.el||!CVH.el.classList.contains('on'))return;CVH.tok++;CVH.el.classList.remove('on');document.documentElement.style.overflow='';try{Snd.ui(0)}catch(e){}if(CVH.ret&&CVH.ret.focus)CVH.ret.focus({preventScroll:true})}
 
@@ -436,7 +447,7 @@ function render(){
  $('#expBody').innerHTML=DATA.exp.map(e=>`<li><span class="meta">${esc(e.period)}</span><div><b>${esc(L(e.role))}</b><p class="meta" style="margin:.2rem 0">${esc(e.org)}</p><p class="mut" style="margin:.4rem 0 0">${esc(L(e.desc))}</p></div></li>`).join('');
  const c=DATA.contact;
  $('#cl').innerHTML=contactHTML(c);
- $$('#cl .cv').forEach(a=>a.addEventListener('click',e=>{const u=a.getAttribute('href')||'';if(/^\/media\/[A-Za-z0-9_-]{16}\.pdf$/i.test(u)&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey){e.preventDefault();openCv(u)}}));
+ $$('#cl .cv').forEach(a=>a.addEventListener('click',e=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.button)return;const u=cvLocal(a.getAttribute('href'));if(u){e.preventDefault();openCv(u.url,u.kind)}}));
  $$('.card').forEach(b=>{b.onclick=()=>openP3(+b.dataset.p,b);b.onpointerenter=b.onfocus=()=>pull(1);b.onpointerleave=b.onblur=()=>pull(0)});
  carousel();
  {const real=a=>(a||[]).filter(x=>!/^\s*\[/.test(typeof x==='string'?x:'')),tr=lang==='tr',n2=n=>String(n).padStart(2,'0');

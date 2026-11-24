@@ -148,5 +148,5 @@ test('holographic CV viewer: pdf.js is self-hosted with correct types and the CS
   const csp = (await call('GET', '/', undefined, { cookie: '' })).headers.get('content-security-policy');
   assert.match(csp, /script-src 'self'/); assert.match(csp, /font-src 'self'/); assert.match(csp, /connect-src 'self'/);
   const page = (await call('GET', '/', undefined, { cookie: '' })).text;
-  for (const k of ['function openCv(url)', "import('/vendor/pdfjs/pdf.min.mjs')", 'id="cvhStage"', 'cvhClose']) assert.ok(page.includes(k), k);
+  for (const k of ['async function openCv(url,kind', 'function cvLocal(h)', "import('/vendor/pdfjs/pdf.min.mjs')", 'id="cvhStage"', 'cvhClose']) assert.ok(page.includes(k), k);
 });
