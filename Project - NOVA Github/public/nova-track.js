@@ -87,7 +87,7 @@
     const w = document.querySelector('#contact .wrap'); if (!w) return;
     const b = document.createElement('button'); b.textContent = TXT[L()].p; b.className = 'top'; b.onclick = banner; w.append(b);
   }
-  window.NovaTrack = { consent: () => consent, optIn: () => choose('granted'), optOut: () => choose('denied'), open: banner };
+  window.NovaTrack = { track: (n, o) => ev(n, o), consent: () => consent, optIn: () => choose('granted'), optOut: () => choose('denied'), open: banner };
   const go = () => { privacyLink(); if (consent === 'granted') start(); else if (consent === null) banner(); };
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', go) : go();
 })();

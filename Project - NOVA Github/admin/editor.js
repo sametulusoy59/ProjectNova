@@ -9,7 +9,7 @@
     let c;
     if (opt.type === 'checkbox') { c = h('input', { type: 'checkbox' }); c.checked = !!o[k]; c.addEventListener('change', () => { o[k] = c.checked; ctx.dirty(); }); return c; }
     c = h(opt.area ? 'textarea' : 'input', opt.area ? { rows: opt.rows || 3 } : { type: opt.type || 'text' });
-    if (opt.max) c.setAttribute('maxlength', opt.max); if (opt.min != null) { c.setAttribute('min', opt.min); c.setAttribute('max', opt.maxv); }
+    if (opt.max) c.setAttribute('maxlength', opt.max); if (opt.step) c.setAttribute('step', opt.step); if (opt.min != null) { c.setAttribute('min', opt.min); c.setAttribute('max', opt.maxv); }
     const toStr = v => opt.list === 'lines' ? (v || []).join('\n') : opt.list === 'csv' ? (v || []).join(', ') : (v ?? '');
     c.value = toStr(o[k]);
     c.addEventListener('input', () => { const v = c.value; o[k] = opt.list === 'lines' ? v.split('\n').map(x => x.trim()).filter(Boolean) : opt.list === 'csv' ? v.split(',').map(x => x.trim()).filter(Boolean) : opt.type === 'number' ? +v : v; ctx.dirty(); });
@@ -56,7 +56,7 @@
   FORMS.skills = (m, el) => el.append(listEditor(m, null, g => g.cat && (g.cat.tr || g.cat.en), g => h('div', {}, bi('Kategori adı', g, 'cat', { max: 60 }), f('Yetenekler (satır başına bir)', g, 'items', { area: 1, rows: 5, list: 'lines' })), () => ({ cat: { en: '', tr: '' }, items: [] }), 'kategori'));
   FORMS.experience = (m, el) => el.append(listEditor(m, null, e => e.role && (e.role.tr || e.role.en), e => h('div', {}, bi('Görev', e, 'role', { max: 100 }), f('Kurum', e, 'org', { max: 100 }), f('Dönem (ör. 2022 — 2024)', e, 'period', { max: 40 }), bi('Açıklama', e, 'desc', { area: 1, rows: 4 })), () => ({ role: { en: '', tr: '' }, org: '', period: '', desc: { en: '', tr: '' } }), 'kayıt'));
 
-  const THEME_DEF = { accent: '#00D9FF', accent2: '#0088FF', quality: 'auto', particles: 1, stars: 1, glow: 1, coreScale: 1, journeyVh: 650, smooth: 6, shooting: 1, trail: true, spacing: 1, radius: 2, grain: 0.07, vignette: 1 };
+  const THEME_DEF = { accent: '#00D9FF', accent2: '#0088FF', quality: 'auto', particles: 1, stars: 1, glow: 1, coreScale: 1, journeyVh: 650, smooth: 6, shooting: 1, trail: true, spacing: 1, radius: 2, grain: 0.07, vignette: 1, skyCity: 'İstanbul', skyLat: 41.01, skyLon: 28.98, skyTz: 'Europe/Istanbul', visitorStars: true };
   FORMS.theme = (m, el) => {
     for (const k in THEME_DEF) if (m[k] === undefined) m[k] = THEME_DEF[k];
     el.append(h('p', { class: 'mut' }, 'Yalnızca sitede gerçekten desteklenen ayarlar. "Önizle" ile yayınlamadan önce kendiniz görün. Vurgu renkleri arayüz öğelerini (metin vurguları, çizgiler, düğmeler) etkiler; 3D çekirdeğin renk paleti shader içinde sabittir.'),
@@ -65,6 +65,10 @@
       rng('Süpernova parçacık yoğunluğu', m, 'particles', 0.25, 2, 0.05, '×'), rng('Yıldız yoğunluğu', m, 'stars', 0.25, 2, 0.05, '×'), rng('Parıltı yoğunluğu', m, 'glow', 0.5, 1.5, 0.05, '×'), rng('Enerji çekirdeği boyutu', m, 'coreScale', 0.7, 1.4, 0.05, '×'),
       rng('Kayan yıldız sıklığı (0 = kapalı)', m, 'shooting', 0, 2, 0.1, '×'), h('label', { class: 'f' }, h('span', {}, 'İmleç parıltı izi'), inp(m, 'trail', { type: 'checkbox' })),
       h('h3', {}, 'Kaydırma ve geçişler'), rng('Giriş animasyonunun uzunluğu', m, 'journeyVh', 400, 900, 10, ' vh'), rng('Kaydırma yumuşaklığı (yüksek = daha seri)', m, 'smooth', 3, 10, 0.5),
+      h('h3', {}, 'Kapanış gökyüzü'), h('p', { class: 'mut' }, 'İletişim bölümündeki gerçek gökyüzü bu konumdan, ziyaretçinin o anki saatine göre hesaplanır.'),
+      h('div', { class: 'bi' }, f('Şehir adı (ör. İstanbul)', m, 'skyCity', { max: 40 }), h('div', { class: 'bi' }, f('Enlem (°K, güney için −)', m, 'skyLat', { type: 'number', step: '0.01', num: 1 }), f('Boylam (°D, batı için −)', m, 'skyLon', { type: 'number', step: '0.01', num: 1 }))),
+      f('Saat dilimi (IANA, ör. Europe/Istanbul)', m, 'skyTz', { max: 40 }),
+      h('label', { class: 'f' }, h('span', {}, 'Ziyaretçiler yıldız bırakabilsin (onayınızla yayınlanır)'), inp(m, 'visitorStars', { type: 'checkbox' })),
       h('h3', {}, 'Görünüm'), rng('Bölüm boşlukları', m, 'spacing', 0.6, 1.6, 0.05, '×'), rng('Köşe yuvarlaklığı', m, 'radius', 0, 16, 1, ' px'), rng('Film greni', m, 'grain', 0, 0.2, 0.01), rng('Kenar karartması', m, 'vignette', 0, 1, 0.05),
       h('button', { class: 'danger', onclick: async () => { if (!confirm('Tüm tema ayarları varsayılana dönsün mü? (Yayınlamadan sitede değişmez.)')) return; Object.assign(m, THEME_DEF); try { await ctx.save(); ctx.reopen(); } catch {} } }, 'Varsayılana sıfırla'));
   };

@@ -7,8 +7,8 @@ const totp = require('./lib/totp'), netguard = require('./lib/netguard'), { make
 
 const KEYS = new Set(['site', 'projects', 'skills', 'experience', 'theme', 'seo']);
 const EVENTS = new Set(['session_start', 'page_view', 'section_view', 'nav_click', 'project_click', 'project_open', 'link_click',
-  'contact_click', 'cv_download', 'lang_switch', 'cta_click', 'scroll_depth', 'engagement', 'scene_transition', 'core_interact', 'js_error', 'perf', 'click_pos']);
-const CLICKS = ['nav_click', 'project_click', 'project_open', 'link_click', 'contact_click', 'cv_download', 'cta_click'];
+  'contact_click', 'cv_download', 'lang_switch', 'cta_click', 'scroll_depth', 'engagement', 'scene_transition', 'core_interact', 'js_error', 'perf', 'click_pos', 'star_submit', 'cli_command', 'sky_view']);
+const CLICKS = ['star_submit', 'nav_click', 'project_click', 'project_open', 'link_click', 'contact_click', 'cv_download', 'cta_click'];
 const PERM = { owner: ['content', 'analytics', 'audit', 'security'], editor: ['content', 'analytics'], viewer: ['analytics'] };
 const FUNNEL_DEFAULT = [{ label: 'Ziyaret', name: 'session_start' }, { label: 'Hakkında bölümü', name: 'section_view', section: 'about' }, { label: 'Projeler bölümü', name: 'section_view', section: 'projects' },
   { label: 'Proje tıklaması', name: 'project_click' }, { label: 'İletişim bölümü', name: 'section_view', section: 'contact' }, { label: 'İletişim / CV tıklaması', names: ['contact_click', 'cv_download'] }];
@@ -68,7 +68,7 @@ function createApp(opts = {}) {
     }
     return null;
   }
-  const byUser = new S.Limiter(5, 15 * 60e3), byIp = new S.Limiter(20, 15 * 60e3), collectLim = new S.Limiter(120, 60e3), apiLim = new S.Limiter(600, 60e3);
+  const byUser = new S.Limiter(5, 15 * 60e3), byIp = new S.Limiter(20, 15 * 60e3), collectLim = new S.Limiter(120, 60e3), apiLim = new S.Limiter(600, 60e3), starLim = new S.Limiter(3, 60 * 60e3), starDay = new S.Limiter(40, 24 * 3600e3);
   const audit = (actor, action, resource, outcome, detail) => S.auditLog(db, actor, action, resource, outcome, detail);
   const now = () => Date.now();
   const ipOf = req => (cfg.trustProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
@@ -337,6 +337,43 @@ function createApp(opts = {}) {
       if (p === '/api/public/content' && m === 'GET') {
         const out = {}; for (const r of q('SELECT key,published FROM content WHERE published IS NOT NULL')) out[r.key] = JSON.parse(r.published);
         return json(res, 200, out, { 'cache-control': 'public, max-age=30' });
+      }
+      // ---- visitor stars: public submit (moderated), public list (approved only), admin moderation ----------------
+      if (p === '/api/stars' && m === 'GET') {
+        if (getRow('theme', false)?.visitorStars === false) return json(res, 200, [], { 'cache-control': 'public, max-age=60' });
+        return json(res, 200, q("SELECT id,name,msg,hue,strftime('%Y-%m-%d',ts/1000,'unixepoch') day FROM stars WHERE status='approved' ORDER BY id DESC LIMIT 300"), { 'cache-control': 'public, max-age=60' });
+      }
+      if (p === '/api/stars' && m === 'POST') {
+        if (!req.headers.origin || !sameOrigin(req)) return json(res, 403, { error: 'bad_origin' });   // browsers always send Origin on a POST fetch
+        if (getRow('theme', false)?.visitorStars === false) return json(res, 403, { error: 'disabled' });
+        const b = await body(req, 4096);
+        if (b.consent !== true) return json(res, 422, { error: 'consent_required' });
+        if (b.web) return json(res, 202, { ok: true, status: 'pending' });   // honeypot: pretend success, store nothing
+        const clean = (v, n) => (typeof v === 'string' ? v.normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069<>`]/g, '').replace(/\s+/g, ' ').trim().slice(0, n) : '');
+        const name = clean(b.name, 24), text = clean(b.msg, 90), hue = Number.isInteger(b.hue) && b.hue >= 0 && b.hue < 360 ? b.hue : 190;
+        if (name.length < 2) return json(res, 422, { error: 'name_required' });
+        if (/(https?:|www\.|\.(com|net|org|io|ru|xyz|top)\b|@)/i.test(name + ' ' + text)) return json(res, 422, { error: 'no_links' });
+        if (!starLim.hit(ipHash(req)) || !starDay.hit('all')) return json(res, 429, { error: 'rate_limited' });
+        if ((one("SELECT COUNT(*) n FROM stars WHERE status='pending'") || {}).n >= 500) return json(res, 429, { error: 'queue_full' });
+        run('INSERT INTO stars(ts,name,msg,hue) VALUES(?,?,?,?)', now(), name, text, hue);   // no IP, no cookie, no e-mail is stored with a star
+        return json(res, 202, { ok: true, status: 'pending' });
+      }
+      if (p === '/api/admin/stars' && m === 'GET') {
+        const s = guard(req, res, 'content'); if (!s) return;
+        run("DELETE FROM stars WHERE status='rejected' AND decided_at<?", now() - 30 * 864e5);   // rejected submissions are kept 30 days at most
+        return json(res, 200, q("SELECT id,ts,name,msg,hue,status,decided_by,decided_at FROM stars ORDER BY status='pending' DESC, id DESC LIMIT 500"));
+      }
+      const sm = /^\/api\/admin\/stars\/(\d{1,9})(?:\/(approve|reject))?$/.exec(p);
+      if (sm) {
+        const s = guard(req, res, 'content', true); if (!s) return;
+        const id = +sm[1], row = one('SELECT id,name FROM stars WHERE id=?', id); if (!row) return json(res, 404, { error: 'not_found' });
+        if (m === 'POST' && sm[2]) {
+          const st = sm[2] === 'approve' ? 'approved' : 'rejected';
+          run('UPDATE stars SET status=?,decided_by=?,decided_at=? WHERE id=?', st, s.username, now(), id); audit(s.username, 'star_' + sm[2], 'star:' + id, 'success');
+          return json(res, 200, { ok: true, status: st });
+        }
+        if (m === 'DELETE' && !sm[2]) { run('DELETE FROM stars WHERE id=?', id); audit(s.username, 'star_delete', 'star:' + id, 'success'); return json(res, 200, { ok: true }); }
+        return json(res, 405, { error: 'method_not_allowed' });
       }
       if (p === '/api/admin/login' && m === 'POST') {
         if (!sameOrigin(req)) return json(res, 403, { error: 'bad_origin' });

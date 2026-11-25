@@ -7,6 +7,7 @@ function cleanTheme(t = {}) {
   return { accent: hex(t.accent, '#00D9FF'), accent2: hex(t.accent2, '#0088FF'), quality: ['auto', 'low', 'medium', 'high'].includes(t.quality) ? t.quality : 'auto',
     particles: clampN(t.particles, .25, 2, 1), stars: clampN(t.stars, .25, 2, 1), glow: clampN(t.glow, .5, 1.5, 1), coreScale: clampN(t.coreScale, .7, 1.4, 1),
     journeyVh: Math.round(clampN(t.journeyVh, 400, 900, 650)), smooth: clampN(t.smooth, 3, 10, 6), shooting: clampN(t.shooting, 0, 2, 1), trail: t.trail !== false,
+    skyCity: (typeof t.skyCity === 'string' ? t.skyCity.replace(/[\u0000-\u001f<>"'`]/g, '').trim().slice(0, 40) : '') || 'İstanbul', skyLat: clampN(t.skyLat, -89.9, 89.9, 41.01), skyLon: clampN(t.skyLon, -180, 180, 28.98), skyTz: typeof t.skyTz === 'string' && /^[A-Za-z]+(\/[A-Za-z0-9_+-]+){1,2}$/.test(t.skyTz) ? t.skyTz : 'Europe/Istanbul', visitorStars: t.visitorStars !== false,
     spacing: clampN(t.spacing, .6, 1.6, 1), radius: Math.round(clampN(t.radius, 0, 16, 2)), grain: clampN(t.grain, 0, .2, .07), vignette: clampN(t.vignette, 0, 1, 1) };
 }
 const str = (v, n) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, '').trim().slice(0, n) : '');
