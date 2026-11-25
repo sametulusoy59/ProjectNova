@@ -142,11 +142,11 @@ test('.env loader: parses comments/quotes, never overrides real environment vari
 });
 
 test('holographic CV viewer: pdf.js is self-hosted with correct types and the CSP allows its module worker and fonts', async () => {
-  for (const [f, t] of [['/vendor/pdfjs/pdf.min.mjs', /text\/javascript/], ['/vendor/pdfjs/pdf.worker.min.mjs', /text\/javascript/], ['/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf', /font\/ttf/], ['/vendor/pdfjs/standard_fonts/FoxitSerif.pfb', /octet-stream/]]) {
+  for (const [f, t] of [['/assets/pdfjs/pdf.min.js', /text\/javascript/], ['/assets/pdfjs/pdf.worker.min.js', /text\/javascript/], ['/assets/pdfjs/standard_fonts/LiberationSans-Regular.ttf', /font\/ttf/], ['/assets/pdfjs/standard_fonts/FoxitSerif.pfb', /octet-stream/]]) {
     const r = await call('GET', f, undefined, { cookie: '' }); assert.equal(r.status, 200, f); assert.match(r.headers.get('content-type'), t, f);
   }
   const csp = (await call('GET', '/', undefined, { cookie: '' })).headers.get('content-security-policy');
   assert.match(csp, /script-src 'self'/); assert.match(csp, /font-src 'self'/); assert.match(csp, /connect-src 'self'/);
   const page = (await call('GET', '/', undefined, { cookie: '' })).text;
-  for (const k of ['async function openCv(url,kind', 'function cvLocal(h)', "import('/vendor/pdfjs/pdf.min.mjs')", 'id="cvhStage"', 'cvhClose']) assert.ok(page.includes(k), k);
+  for (const k of ['async function openCv(url,kind', 'function cvLocal(h)', "import('/assets/pdfjs/pdf.min.js')", 'id="cvhStage"', 'cvhClose']) assert.ok(page.includes(k), k);
 });

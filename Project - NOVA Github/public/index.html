@@ -383,17 +383,23 @@ async function cvhImage(url,tok){const img=new Image();img.decoding='async';img.
  const cv=document.createElement('canvas');cv.width=Math.max(1,Math.floor(img.naturalWidth*fit*dpr));cv.height=Math.max(1,Math.floor(img.naturalHeight*fit*dpr));cv.style.width=Math.floor(cv.width/dpr)+'px';cv.style.height=Math.floor(cv.height/dpr)+'px';
  cv.setAttribute('role','img');cv.setAttribute('aria-label',lang==='tr'?'Özgeçmiş':'Résumé');
  const cx=cv.getContext('2d',{willReadFrequently:true});cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(img,0,0,cv.width,cv.height);holoify(cv);CVH.doc=null;cvhShow(cv,1,1)}
-async function openCv(url,kind='pdf'){
+async function openCv(url,kind='pdf'){let stage='';
  if(!CVH.el)cvhBuild();cvhText();CVH.url=url;CVH.ret=document.activeElement;const tok=++CVH.tok;
  $('#cvhD').href=url;$('#cvhPg').textContent='';$('#cvhP').disabled=$('#cvhN').disabled=true;
  CVH.el.classList.add('on');document.documentElement.style.overflow='hidden';$('#cvhX').focus();
  cvhMsg(lang==='tr'?'HOLOGRAM YÜKLENİYOR…':'PROJECTING HOLOGRAM…');try{Snd.ui(1)}catch(e){}
  try{
   if(kind==='img'){await cvhImage(url,tok);return}
-  if(!window.__pdfjs){window.__pdfjs=await import('/vendor/pdfjs/pdf.min.mjs');window.__pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.min.mjs'}
-  if(!CVH.doc||CVH.doc.__url!==url){CVH.doc=await window.__pdfjs.getDocument({url,standardFontDataUrl:'/vendor/pdfjs/standard_fonts/',isEvalSupported:false}).promise;CVH.doc.__url=url}
+  stage='LIB';                                                      // the error code tells which step failed
+  if(!window.__pdfjs){window.__pdfjs=await import('/assets/pdfjs/pdf.min.js');window.__pdfjs.GlobalWorkerOptions.workerSrc='/assets/pdfjs/pdf.worker.min.js'}
+  if(!CVH.doc||CVH.doc.__url!==url){
+   stage='FILE';const r=await fetch(url,{credentials:'same-origin',cache:'no-cache'});if(!r.ok)throw Object.assign(new Error('HTTP '+r.status),{code:'FILE-'+r.status});
+   const data=new Uint8Array(await r.arrayBuffer());if(String.fromCharCode(...data.subarray(0,5))!=='%PDF-')throw Object.assign(new Error('not a PDF'),{code:'FILE-TYPE'});
+   stage='PDF';CVH.doc=await window.__pdfjs.getDocument({data,standardFontDataUrl:'/assets/pdfjs/standard_fonts/',isEvalSupported:false}).promise;CVH.doc.__url=url}
+  stage='DRAW';
   if(tok!==CVH.tok)return;await cvhGo(1,true);
- }catch(e){if(tok===CVH.tok)cvhMsg(lang==='tr'?'Önizleme gösterilemedi — dosyayı yine de indirebilirsin.':'Preview unavailable — you can still download the file.')}
+ }catch(e){console.error('[nova] CV hologram:',e);if(tok===CVH.tok){const code=e&&e.code?e.code:(stage+'-'+((e&&e.name)||'ERR'));
+  cvhMsg((lang==='tr'?'Önizleme gösterilemedi — dosyayı yine de indirebilirsin.':'Preview unavailable — you can still download the file.')+`  [${String(code).slice(0,24)}${e&&e.message?' · '+String(e.message).slice(0,60):''}]`)}}
 }
 async function cvhGo(n,first){
  const d=CVH.doc;if(!d||n<1||n>d.numPages||(n===CVH.page&&!first))return;CVH.page=n;const tok=CVH.tok;
