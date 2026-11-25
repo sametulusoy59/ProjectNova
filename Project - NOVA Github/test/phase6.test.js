@@ -68,5 +68,52 @@ test('visitor stars can be switched off from the theme; sky location is clamped'
 });
 
 test('site: sky, constellation, visitor-star form, terminal and camera journey are wired in', () => {
-  for (const s of ['id="sky"', 'id="starForm"', 'id="cli"', 'id="cliBtn"', 'function skyNow(', 'const CAT=', 'function bhPull(', 'Snd.update(', "fetch('/api/stars'", 'KVKK']) assert.ok(INDEX.includes(s), s);
+  for (const s of ['id="sky"', 'id="starForm"', 'id="cli"', 'id="cliBtn"', 'function skyNow(', 'const CAT=', 'function bhPull(', 'Snd.update(', "fetch('/api/stars'", 'KVKK', 'id="msgForm"', 'function skillMap(', 'function orbitTl(', 'const QUICK=', 'const HOLD=', 'id="chap"', 'uLens', 'const debris=', 'function caseHTML(', 'const ACH=']) assert.ok(INDEX.includes(s), s);
+});
+
+test('contact messages: validated, rate-limited, private to admins; owner gets an SMTP notification', async () => {
+  const net = require('node:net'), got = [];
+  const smtp = net.createServer(c => { c.write('220 fake\r\n'); let buf = '', data = false; c.on('data', d => { buf += d; let i; while ((i = buf.indexOf('\r\n')) >= 0) { const l = buf.slice(0, i); buf = buf.slice(i + 2);
+    if (data) { if (l === '.') { data = false; c.write('250 ok\r\n'); } else got.push(l); continue; }
+    if (/^EHLO/.test(l)) c.write('250-fake\r\n250 AUTH LOGIN\r\n'); else if (l === 'AUTH LOGIN') c.write('334 VXNlcm5hbWU6\r\n'); else if (got.auth === undefined) { got.auth = 1; c.write('334 UGFzc3dvcmQ6\r\n'); } else if (got.auth === 1) { got.auth = 2; c.write('235 ok\r\n'); }
+    else if (/^(MAIL|RCPT)/.test(l)) { got.push(l); c.write('250 ok\r\n'); } else if (l === 'DATA') { data = true; c.write('354 go\r\n'); } else if (l === 'QUIT') { c.write('221 bye\r\n'); c.end(); } } }); });
+  await new Promise(r => smtp.listen(0, '127.0.0.1', r));
+  const a2 = createApp({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nova-p6m-')), quiet: true, mailInTests: true, origin: 'https://example.com', env: { SMTP_HOST: '127.0.0.1', SMTP_PORT: String(smtp.address().port), SMTP_SECURE: 'false', SMTP_USER: 'bot@example.com', SMTP_PASS: 'x', NOTIFY_TO: 'me@example.com' } });
+  await new Promise(r => a2.server.listen(0, '127.0.0.1', r)); const b2 = 'http://127.0.0.1:' + a2.server.address().port;
+  const post = (b, o = b2) => fetch(b2 + '/api/messages', { method: 'POST', headers: { 'content-type': 'application/json', origin: o }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, json: await r.json() }));
+  assert.equal((await post({ consent: true, name: 'Ali', email: 'ali@example.com', body: 'Merhaba, birlikte çalışalım mı?' }, 'https://evil.example')).status, 403);
+  assert.equal((await post({ name: 'Ali', email: 'ali@example.com', body: 'Merhaba, birlikte çalışalım mı?' })).json.error, 'consent_required');
+  assert.equal((await post({ consent: true, name: 'Ali', email: 'not-an-email', body: 'Merhaba, birlikte çalışalım mı?' })).json.error, 'bad_email');
+  assert.equal((await post({ consent: true, name: 'Ali', email: 'ali@example.com', body: 'kısa' })).json.error, 'message_too_short');
+  assert.equal((await post({ consent: true, name: 'Ali\r\nBcc: x@evil.com', email: 'ali@example.com', body: 'Merhaba, birlikte çalışalım mı?\nSatır 2' })).status, 202);
+  for (let i = 0; i < 20 && !got.some(l => l.startsWith('Subject')); i++) await new Promise(r => setTimeout(r, 50));
+  assert.ok(got.includes('RCPT TO:<me@example.com>')); assert.ok(got.some(l => /^Reply-To: <ali@example\.com>$/.test(l))); assert.ok(!got.some(l => /^Bcc/i.test(l)), 'no header injection');
+  const row = a2.db.prepare('SELECT * FROM messages').get(); assert.equal(row.name, 'Ali Bcc: x@evil.com'); assert.equal(row.body, 'Merhaba, birlikte çalışalım mı?\nSatır 2');
+  assert.equal((await post({ consent: true, name: 'Ali', email: 'ali@example.com', body: 'ikinci mesaj burada' })).status, 202);
+  assert.equal((await post({ consent: true, name: 'Ali', email: 'ali@example.com', body: 'üçüncü mesaj burada' })).status, 202);
+  assert.equal((await post({ consent: true, name: 'Ali', email: 'ali@example.com', body: 'dördüncü mesaj burada' })).status, 429);
+  a2.close(); smtp.close();
+  // inbox on the main app: RBAC and badges
+  await call('POST', '/api/messages', { consent: true, name: 'Ayşe', email: 'ayse@example.com', body: 'Bu bir deneme mesajıdır.' }, { cookie: '', token: '', headers: { origin: base, 'x-forwarded-for': '10.7.7.7' } });
+  assert.equal((await call('GET', '/api/admin/messages', undefined, { cookie: vjar, token: vcsrf })).status, 403, 'viewer cannot read messages');
+  const inbox = (await call('GET', '/api/admin/messages')).json; assert.equal(inbox.length, 1); assert.equal(inbox[0].read, 0);
+  const bd = (await call('GET', '/api/admin/badges')).json; assert.equal(bd.messages, 1); assert.equal(typeof bd.stars, 'number');
+  assert.equal((await call('POST', `/api/admin/messages/${inbox[0].id}/read`, {})).status, 200); assert.equal((await call('GET', '/api/admin/badges')).json.messages, 0);
+  assert.equal((await call('DELETE', `/api/admin/messages/${inbox[0].id}`)).status, 200);
+});
+
+test('SEO: published content is embedded in the HTML, /en has its own language, hreflang + sitemap list both; self-hosted libraries are preferred when present', async () => {
+  const a3 = createApp({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'nova-p6s-')), quiet: true, origin: 'https://example.com' });
+  const put = (k, v) => { const t = JSON.stringify(v); a3.db.prepare('INSERT INTO content(key,draft,published,version,pubver,updated_at) VALUES(?,?,?,1,1,?)').run(k, t, t, Date.now()); };
+  put('projects', [{ title: { tr: 'Gizli <b>Proje</b>', en: 'Secret Project' }, desc: { tr: 'Açıklama', en: 'Description' }, tech: ['Node.js'], problem: { tr: 'Sorun metni', en: 'Problem text' } }, { title: { tr: 'Taslak', en: 'Draft' }, hidden: true }]);
+  await new Promise(r => a3.server.listen(0, '127.0.0.1', r)); const b3 = 'http://127.0.0.1:' + a3.server.address().port;
+  const tr = await (await fetch(b3 + '/')).text(), en = await (await fetch(b3 + '/en')).text();
+  assert.match(tr, /<h3>Gizli &lt;b&gt;Proje&lt;\/b&gt;<\/h3>/); assert.match(tr, /<p>Sorun metni<\/p>/); assert.ok(!tr.includes('<h3>Taslak'), 'hidden projects are not prerendered');
+  assert.match(en, /<html lang="en">/); assert.match(en, /<h3>Secret Project<\/h3>/); assert.match(en, /<link rel="canonical" href="https:\/\/example\.com\/en">/);
+  assert.match(tr, /hreflang="en" href="https:\/\/example\.com\/en"/); assert.match(tr, /window\.NOVA_CONTENT=\{/); assert.ok(!/NOVA_CONTENT=[^<]*<\/script/.test(tr.replace(/<\/script>/g, '')), 'json is script-safe');
+  const sm = await (await fetch(b3 + '/sitemap.xml')).text(); assert.match(sm, /<loc>https:\/\/example\.com\/en<\/loc>/); assert.match(sm, /xhtml:link/);
+  const vdir = path.join(__dirname, '../public/assets/vendor'), f = path.join(vdir, 'gsap.min.js'); fs.mkdirSync(vdir, { recursive: true }); fs.writeFileSync(f, '/* test */');
+  try { const pg = await (await fetch(b3 + '/')).text(); assert.ok(pg.includes('src="/assets/vendor/gsap.min.js"')); assert.ok(pg.includes('three.js/r128/three.min.js'), 'missing files keep the CDN'); }
+  finally { fs.rmSync(f); try { fs.rmdirSync(vdir); } catch {} }
+  a3.close();
 });

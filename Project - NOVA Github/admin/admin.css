@@ -33,3 +33,5 @@ canvas.heat{width:100%;max-width:760px;aspect-ratio:16/9;background:#02060f;bord
 code,.key{font-family:ui-monospace,Menlo,Consolas,monospace;background:#02060f;padding:.1rem .4rem;word-break:break-all}.key{display:block;padding:.6rem;margin:.5rem 0}
 
 .pdfbox{height:130px;display:grid;place-items:center;border:1px dashed var(--cy);color:var(--cy);font:700 1.4rem ui-monospace,Menlo,monospace;margin-bottom:.5rem;background:#02060f}
+
+.badge{display:inline-block;min-width:1.3rem;margin-left:.5rem;padding:0 .35rem;border-radius:9px;background:var(--bad);color:#fff;font:600 .68rem ui-monospace,Menlo,monospace;font-style:normal;text-align:center;line-height:1.3rem}

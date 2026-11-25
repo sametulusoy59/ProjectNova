@@ -26,7 +26,9 @@ test.after(() => app.close());
 test('public site is served unchanged with security headers', async () => {
   const r = await call('GET', '/');
   assert.equal(r.status, 200); assert.match(r.text, /PROJECT NOVA/); assert.equal(r.headers.get('x-content-type-options'), 'nosniff'); assert.match(r.headers.get('content-security-policy'), /frame-ancestors 'none'/);
-  assert.equal(r.text, fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8').replace('<!--NOVA_HEAD-->', ''), 'with nothing configured the page is served untouched');
+  assert.equal(r.text, fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8').replace('<html lang="en">', '<html lang="tr">').replace('<!--NOVA_HEAD-->', '<script>window.NOVA_LANG="tr"</script>'), 'with nothing configured only the language is set');
+  const en = await call('GET', '/en'); assert.equal(en.status, 200); assert.match(en.text, /<html lang="en">/); assert.match(en.text, /NOVA_LANG="en"/);
+  assert.equal((await call('GET', '/tr')).headers.get('location'), '/');
 });
 test('static serving blocks traversal, dotfiles and unknown types', async () => {
   for (const p of ['/..%2f..%2fserver.js', '/%2e%2e/lib/db.js', '/.env', '/../server.js', '/admin/..%2f..%2fserver.js', '/nope.js%00']) assert.ok([400, 404].includes((await call('GET', p)).status), p);

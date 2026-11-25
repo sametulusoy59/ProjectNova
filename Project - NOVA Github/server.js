@@ -3,7 +3,7 @@ const http = require('node:http'), fs = require('node:fs'), path = require('node
 const { open } = require('./lib/db');
 require('./lib/env').load(path.join(__dirname, '.env'));
 const S = require('./lib/security'), crypto = require('node:crypto');
-const totp = require('./lib/totp'), netguard = require('./lib/netguard'), { makeBackup, listBackups } = require('./lib/backup'), { injectIndex, cleanTheme, cleanSeo } = require('./lib/inject');
+const mail = require('./lib/mail'), totp = require('./lib/totp'), netguard = require('./lib/netguard'), { makeBackup, listBackups } = require('./lib/backup'), { injectIndex, cleanTheme, cleanSeo } = require('./lib/inject');
 
 const KEYS = new Set(['site', 'projects', 'skills', 'experience', 'theme', 'seo']);
 const EVENTS = new Set(['session_start', 'page_view', 'section_view', 'nav_click', 'project_click', 'project_open', 'link_click',
@@ -18,6 +18,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 const CSP_SITE = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
 const CSP_ADMIN = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
+const VENDOR = [['three.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'], ['gsap.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js'], ['ScrollTrigger.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js']];
 const httpErr = (code, msg) => Object.assign(new Error(msg), { code });
 
 function defaultDataDir() {   // ./data if writable, otherwise ~/nova-data (some hosts mount the app folder read-only)
@@ -68,7 +69,9 @@ function createApp(opts = {}) {
     }
     return null;
   }
-  const byUser = new S.Limiter(5, 15 * 60e3), byIp = new S.Limiter(20, 15 * 60e3), collectLim = new S.Limiter(120, 60e3), apiLim = new S.Limiter(600, 60e3), starLim = new S.Limiter(3, 60 * 60e3), starDay = new S.Limiter(40, 24 * 3600e3);
+  const byUser = new S.Limiter(5, 15 * 60e3), byIp = new S.Limiter(20, 15 * 60e3), collectLim = new S.Limiter(120, 60e3), apiLim = new S.Limiter(600, 60e3), starLim = new S.Limiter(3, 60 * 60e3), starDay = new S.Limiter(40, 24 * 3600e3), msgLim = new S.Limiter(3, 60 * 60e3), msgDay = new S.Limiter(60, 24 * 3600e3);
+  const MAIL = mail.config(cfg.env || process.env);
+  const notify = (subject, text, replyTo) => { if (!MAIL.ok || cfg.quiet && !cfg.mailInTests) return; mail.send(MAIL, { subject, text, replyTo }).catch(e => console.error('[nova] notification e-mail failed:', e.message)); };
   const audit = (actor, action, resource, outcome, detail) => S.auditLog(db, actor, action, resource, outcome, detail);
   const now = () => Date.now();
   const ipOf = req => (cfg.trustProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
@@ -153,7 +156,7 @@ function createApp(opts = {}) {
       if (++nodes > 5000 || d > 8) throw httpErr(422, 'too_complex');
       if (typeof v === 'string') {
         if (v.length > 5000) throw httpErr(422, `string_too_long:${k}`);
-        if (/(^|_)(url|live|code|href|src|link|cv|image|github|linkedin|canonical)$/i.test(k || '') && v && !/^(https?:\/\/|mailto:|\/(?!\/)|#)/i.test(v)) throw httpErr(422, `unsafe_url:${k}`);
+        if (/(^|_)(url|live|code|href|src|link|cv|image|gallery|github|linkedin|canonical)$/i.test(k || '') && v && !/^(https?:\/\/|mailto:|\/(?!\/)|#)/i.test(v)) throw httpErr(422, `unsafe_url:${k}`);
         if (k === 'email' && v && !/^[^\s@<>"'`]+@[^\s@<>"'`]+\.[^\s@<>"'`]+$/.test(v)) throw httpErr(422, 'bad_email');
       } else if (Array.isArray(v)) v.forEach(x => walk(x, k, d + 1));
       else if (v && typeof v === 'object') for (const [kk, vv] of Object.entries(v)) { if (['__proto__', 'constructor', 'prototype'].includes(kk)) throw httpErr(422, 'forbidden_key'); walk(vv, kk, d + 1); }
@@ -356,6 +359,7 @@ function createApp(opts = {}) {
         if (!starLim.hit(ipHash(req)) || !starDay.hit('all')) return json(res, 429, { error: 'rate_limited' });
         if ((one("SELECT COUNT(*) n FROM stars WHERE status='pending'") || {}).n >= 500) return json(res, 429, { error: 'queue_full' });
         run('INSERT INTO stars(ts,name,msg,hue) VALUES(?,?,?,?)', now(), name, text, hue);   // no IP, no cookie, no e-mail is stored with a star
+        notify('NOVA · yeni yıldız onay bekliyor', `${name}${text ? ' — ' + text : ''}\n\nOnaylamak için: ${(cfg.origin || '').replace(/\/$/, '')}/admin/  →  Yıldızlar`);
         return json(res, 202, { ok: true, status: 'pending' });
       }
       if (p === '/api/admin/stars' && m === 'GET') {
@@ -374,6 +378,40 @@ function createApp(opts = {}) {
         }
         if (m === 'DELETE' && !sm[2]) { run('DELETE FROM stars WHERE id=?', id); audit(s.username, 'star_delete', 'star:' + id, 'success'); return json(res, 200, { ok: true }); }
         return json(res, 405, { error: 'method_not_allowed' });
+      }
+      // ---- contact messages: public submit, admin inbox -----------------------------------------------------
+      if (p === '/api/messages' && m === 'POST') {
+        if (!req.headers.origin || !sameOrigin(req)) return json(res, 403, { error: 'bad_origin' });
+        const b = await body(req, 8192);
+        if (b.consent !== true) return json(res, 422, { error: 'consent_required' });
+        if (b.web) return json(res, 202, { ok: true });   // honeypot
+        const cl = (v, n) => (typeof v === 'string' ? v.normalize('NFC').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/[​-‏‪-‮⁦-⁩]/g, '').trim().slice(0, n) : '');
+        const name = cl(b.name, 60).replace(/\s+/g, ' '), email = mail.addr(cl(b.email, 120)), text = cl(b.body, 2000);
+        if (name.length < 2) return json(res, 422, { error: 'name_required' });
+        if (!email) return json(res, 422, { error: 'bad_email' });
+        if (text.length < 10) return json(res, 422, { error: 'message_too_short' });
+        if (!msgLim.hit(ipHash(req)) || !msgDay.hit('all')) return json(res, 429, { error: 'rate_limited' });
+        run('INSERT INTO messages(ts,name,email,body) VALUES(?,?,?,?)', now(), name, email, text);
+        notify(`NOVA · yeni mesaj: ${name}`, `${name} <${email}>\n\n${text}\n\n— ${(cfg.origin || '').replace(/\/$/, '')}/admin/  →  Mesajlar`, email);
+        return json(res, 202, { ok: true });
+      }
+      if (p === '/api/admin/messages' && m === 'GET') {
+        const s = guard(req, res, 'content'); if (!s) return;
+        run('DELETE FROM messages WHERE ts<?', now() - 365 * 864e5);   // kept one year at most
+        return json(res, 200, q('SELECT id,ts,name,email,body,read FROM messages ORDER BY id DESC LIMIT 500'));
+      }
+      const mg = /^\/api\/admin\/messages\/(\d{1,9})(?:\/(read|unread))?$/.exec(p);
+      if (mg) {
+        const s = guard(req, res, 'content', true); if (!s) return;
+        const id = +mg[1]; if (!one('SELECT id FROM messages WHERE id=?', id)) return json(res, 404, { error: 'not_found' });
+        if (m === 'POST' && mg[2]) { run('UPDATE messages SET read=? WHERE id=?', mg[2] === 'read' ? 1 : 0, id); return json(res, 200, { ok: true }); }
+        if (m === 'DELETE' && !mg[2]) { run('DELETE FROM messages WHERE id=?', id); audit(s.username, 'message_delete', 'message:' + id, 'success'); return json(res, 200, { ok: true }); }
+        return json(res, 405, { error: 'method_not_allowed' });
+      }
+      if (p === '/api/admin/badges' && m === 'GET') {
+        const s = guard(req, res); if (!s) return;
+        if (!allow(s, 'content')) return json(res, 200, { stars: 0, messages: 0, mail: MAIL.ok });
+        return json(res, 200, { stars: one("SELECT COUNT(*) n FROM stars WHERE status='pending'").n, messages: one('SELECT COUNT(*) n FROM messages WHERE read=0').n, mail: MAIL.ok });
       }
       if (p === '/api/admin/login' && m === 'POST') {
         if (!sameOrigin(req)) return json(res, 403, { error: 'bad_origin' });
@@ -599,11 +637,14 @@ function createApp(opts = {}) {
     }
     if (p === '/admin') { res.writeHead(301, { location: '/admin/' }); return res.end(); }
     if (p.startsWith('/admin/')) return serve(req, res, path.join(__dirname, 'admin'), p.slice(6), CSP_ADMIN, true);   // login page only; every API it calls is authenticated
-    if (p === '/' || p === '/index.html') {
+    if (p === '/en' || p === '/en/' || p === '/tr' || p === '/tr/') { if (p !== '/en') { res.writeHead(301, { location: p.startsWith('/tr') ? '/' : '/en' }); return res.end(); } }
+    if (p === '/' || p === '/index.html' || p === '/en') {
       const preview = u.searchParams.get('nova_preview') === '1' && !!getSession(req), g = k => getRow(k, preview);   // drafts only for a logged-in admin
       let html; try { html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'); } catch { return json(res, 500, { error: 'internal_error' }); }
       headers(res, CSP_SITE); res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-cache' });
-      return res.end(req.method === 'HEAD' ? undefined : injectIndex(html, { theme: g('theme'), site: g('site'), seo: g('seo'), analytics: OPS().analytics, origin: cfg.origin.replace(/\/$/, '') }));
+      for (const [f, cdn] of VENDOR) if (fs.existsSync(path.join(__dirname, 'public', 'assets', 'vendor', f))) html = html.replace(cdn, '/assets/vendor/' + f);   // self-hosted copies, if the build fetched them
+      const content = {}; for (const k of ['site', 'projects', 'skills', 'experience']) { const v = g(k); if (v) content[k] = v; }
+      return res.end(req.method === 'HEAD' ? undefined : injectIndex(html, { theme: g('theme'), site: g('site'), seo: g('seo'), analytics: OPS().analytics, origin: cfg.origin.replace(/\/$/, ''), content, lang: p === '/en' ? 'en' : 'tr' }));
     }
     if (p === '/robots.txt') {
       const seo = getRow('seo', false), body = seo && seo.robots === 'noindex' ? 'User-agent: *\nDisallow: /\n' : `User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /api/\n${cfg.origin ? 'Sitemap: ' + cfg.origin.replace(/\/$/, '') + '/sitemap.xml\n' : ''}`;
@@ -613,7 +654,7 @@ function createApp(opts = {}) {
       if (!cfg.origin) return json(res, 404, { error: 'not_found' });
       const last = one('SELECT MAX(updated_at) t FROM content WHERE published IS NOT NULL').t || now(), base = cfg.origin.replace(/\/$/, '');
       res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' });
-      return res.end(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${base}/</loc><lastmod>${new Date(last).toISOString().slice(0, 10)}</lastmod></url></urlset>\n`);
+      return res.end(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${['/', '/en'].map(u => `<url><loc>${base}${u}</loc><lastmod>${new Date(last).toISOString().slice(0, 10)}</lastmod><xhtml:link rel="alternate" hreflang="tr" href="${base}/"/><xhtml:link rel="alternate" hreflang="en" href="${base}/en"/></url>`).join('')}</urlset>\n`);
     }
     return serve(req, res, path.join(__dirname, 'public'), p, CSP_SITE);
   }

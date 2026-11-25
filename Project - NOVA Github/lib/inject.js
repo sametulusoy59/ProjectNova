@@ -19,8 +19,26 @@ function cleanSeo(s = {}) {
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const jsonSafe = o => JSON.stringify(o).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 
-function injectIndex(html, { theme, site, seo, analytics = true, origin = '' }) {
-  let out = html; const head = [];
+// Published content is embedded in the page: no placeholder flash for visitors, and crawlers / link previews see real text without running JS.
+const L2 = (o, lang) => (o && typeof o === 'object' && !Array.isArray(o) ? str(o[lang] || o.en || o.tr || '', 5000) : str(o, 5000));
+const real = v => v && !/^\s*\[/.test(v);
+function prerender(html, c, lang) {
+  const e = v => esc(v), p = (c.site && c.site.profile) || {}, put = (re, inner) => { html = html.replace(re, (m, a, b) => a + inner + b); };
+  const bio = L2(p.bio, lang), ints = (p.interests && (p.interests[lang] || p.interests.en)) || [];
+  if (p.name || bio) put(/(<div class="about reveal" id="aboutBody">)(<\/div>)/, `<div><h2>${e(str(p.name, 80))}</h2>${real(bio) ? `<p>${e(bio)}</p>` : ''}</div>${ints.filter(real).length ? `<ul>${ints.filter(real).slice(0, 20).map(i => `<li>${e(str(i, 120))}</li>`).join('')}</ul>` : ''}`);
+  if (Array.isArray(c.projects)) put(/(<div class="gallery" id="gallery"[^>]*>)(<\/div>)/, c.projects.filter(x => x && !x.hidden).slice(0, 40).map((x, i) => `<article class="card" id="${lang === 'en' ? 'project' : 'proje'}-${i + 1}"><div class="tx"><h3>${e(L2(x.title, lang))}</h3><p>${e(L2(x.desc, lang))}</p>${['problem', 'approach', 'result'].map(k => L2(x[k], lang)).filter(Boolean).map(t => `<p>${e(t)}</p>`).join('')}<div class="tags">${(x.tech || []).filter(real).slice(0, 20).map(t => `<span>${e(str(t, 60))}</span>`).join('')}</div></div></article>`).join(''));
+  if (Array.isArray(c.skills)) put(/(<div class="sk reveal" id="skBody">)(<\/div>)/, c.skills.slice(0, 30).map(g => `<div><h3>${e(L2(g.cat, lang))}</h3><ul>${(g.items || []).filter(real).slice(0, 60).map(s => `<li>${e(str(s, 80))}</li>`).join('')}</ul></div>`).join(''));
+  if (Array.isArray(c.experience)) put(/(<ul class="tl reveal" id="expBody">)(<\/ul>)/, c.experience.slice(0, 40).map(x => `<li><span class="meta">${e(str(x.period, 40))}</span><div><b>${e(L2(x.role, lang))}</b><p>${e(str(x.org, 100))}</p><p>${e(L2(x.desc, lang))}</p></div></li>`).join(''));
+  return html;
+}
+
+function injectIndex(html, { theme, site, seo, analytics = true, origin = '', content = null, lang = 'tr', path = '/' }) {
+  let out = html.replace('<html lang="en">', `<html lang="${lang === 'en' ? 'en' : 'tr'}">`); const head = [];
+  if (content && Object.keys(content).length) {
+    out = prerender(out, content, lang === 'en' ? 'en' : 'tr');
+    head.push(`<script>window.NOVA_CONTENT=${jsonSafe(content)}</script>`);
+  }
+  head.push(`<script>window.NOVA_LANG=${jsonSafe(lang === 'en' ? 'en' : 'tr')}</script>`);
   if (site && site.title) out = out.replace(/<title>[\s\S]*?<\/title>/, () => `<title>${esc(str(site.title, 120))}</title>`);
   if (site && site.description) out = out.replace(/(<meta name="description" content=")[^"]*(")/, (_, a, b) => a + esc(str(site.description, 300)) + b);
   const settings = {};
@@ -31,7 +49,8 @@ function injectIndex(html, { theme, site, seo, analytics = true, origin = '' }) 
   if (analytics === false) settings.analytics = false;
   if (Object.keys(settings).length) head.push(`<script>window.NOVA_SETTINGS=${jsonSafe(settings)}</script>`);
   const s = seo ? cleanSeo(seo) : null, title = (site && site.title) || 'PROJECT NOVA', desc = (site && site.description) || '';
-  const canon = (s && s.canonical) || (origin ? origin + '/' : '');
+  const root = ((s && s.canonical) || (origin ? origin + '/' : '')).replace(/\/$/, ''), canon = root ? root + (lang === 'en' ? '/en' : '/') : '';
+  if (root) head.push(`<link rel="alternate" hreflang="tr" href="${esc(root)}/"><link rel="alternate" hreflang="en" href="${esc(root)}/en"><link rel="alternate" hreflang="x-default" href="${esc(root)}/">`);
   if (s) head.push(`<meta name="robots" content="${s.robots === 'noindex' ? 'noindex,nofollow' : 'index,follow'}">`);
   if (canon) head.push(`<link rel="canonical" href="${esc(canon)}">`);
   if (s || canon) {

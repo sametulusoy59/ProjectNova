@@ -89,3 +89,21 @@ Yeni sürümün zip'ini aynı şekilde yükleyip açın (`.env` dosyanız ve ver
 Analitik yalnızca ziyaretçi **izin verirse** çalışır; çerez kullanmaz, IP adresi saklamaz, 90 gün sonra siler. Yine de sitenize
 bir gizlilik/aydınlatma metni eklemeniz ve gerekirse bir hukukçuya danışmanız önerilir. Analitiği tamamen kapatmak için
 `public/index.html` içindeki `nova-track.js` satırını silin.
+
+## Yeni: e-posta bildirimi (isteğe bağlı)
+
+İletişim formundan mesaj geldiğinde ya da biri yıldız bıraktığında e-posta almak için Hostinger → Node.js uygulaması → **Ortam değişkenleri** bölümüne şunları ekleyin ve yeniden dağıtın (Hostinger e-posta hesabınızla çalışır):
+
+| Değişken | Örnek |
+|---|---|
+| `SMTP_HOST` | `smtp.hostinger.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | `bildirim@cagrisametulusoy.com` |
+| `SMTP_PASS` | (o e-posta hesabının parolası — sadece panele yazın, kimseyle paylaşmayın) |
+| `NOTIFY_TO` | bildirimlerin gideceği adres |
+
+Ayarlanmazsa site normal çalışır; mesajlar yine yönetim panelindeki **Mesajlar** sekmesine düşer.
+
+## Yeni: kütüphanelerin kendi sunucunuzdan yüklenmesi
+
+`build` adımı (scripts/check-node.js) artık Three.js ve GSAP'ı `public/assets/vendor/` klasörüne indirmeyi dener. İnebilirse site bu kopyaları kullanır (daha hızlı açılış); inemezse hiçbir şey bozulmaz, site cdnjs'ten yüklemeye devam eder.

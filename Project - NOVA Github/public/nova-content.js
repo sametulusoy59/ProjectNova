@@ -4,6 +4,7 @@
 (async () => {
   try {
     const preview = typeof location !== 'undefined' && /[?&]nova_preview=1/.test(location.search);
+    if (!preview && typeof window !== 'undefined' && window.NOVA_CONTENT) return;   // already applied from the page itself
     let r = preview ? await fetch('/api/admin/preview', { credentials: 'same-origin' }) : null;
     if (!r || !r.ok) r = await fetch('/api/public/content', { credentials: 'omit' });
     if (!r.ok || typeof DATA === 'undefined') return;

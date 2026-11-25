@@ -12,7 +12,7 @@ const msg = e => { const [k, d] = String(e.message).split(':'); return (ERR[k] |
 const toast = (m, bad) => { const t = h('div', { class: 'toast' + (bad ? ' bad' : ''), role: 'status' }, m); document.body.append(t); setTimeout(() => t.remove(), 3800); };
 const table = (head, rows) => rows.length ? h('table', {}, h('thead', {}, h('tr', {}, head.map(x => h('th', {}, x)))), h('tbody', {}, rows.map(r => h('tr', {}, r.map(c => h('td', {}, c)))))) : h('div', { class: 'empty' }, 'Henüz veri yok.');
 const delta = (a, b) => { if (!b) return h('small', { class: 'mut' }, 'önceki dönem verisi yok'); const p = Math.round((a - b) / b * 100); return h('small', { class: p >= 0 ? 'up' : 'dn' }, `${p >= 0 ? '+' : ''}${p}% önceki döneme göre`); };
-const VIEWS = {}, NEEDS = { 'Analitik': 'analytics', 'İçerik': 'content', 'Medya': 'content', 'Yıldızlar': 'content', 'Kullanıcılar': 'security', 'Ayarlar': 'security', 'Denetim': 'audit' };
+const VIEWS = {}, NEEDS = { 'Analitik': 'analytics', 'İçerik': 'content', 'Medya': 'content', 'Yıldızlar': 'content', 'Mesajlar': 'content', 'Kullanıcılar': 'security', 'Ayarlar': 'security', 'Denetim': 'audit' };
 
 function authForm(title, fields, submitText, onSubmit, note) {
   const err = h('div', { class: 'err', role: 'alert' }), inputs = fields.map(([id, label, type, ac, opt]) => h('input', { id, type: type || 'text', autocomplete: ac || 'off', required: opt ? null : '' }));
@@ -32,10 +32,10 @@ async function show(name) {
   const box = h('div'); try { await VIEWS[name](box); m.replaceChildren(box); } catch (e) { if (e.status === 401) return login(); m.replaceChildren(h('div', { class: 'empty' }, e.status === 403 ? 'Bu bölüme erişim yetkiniz yok.' : 'Yüklenemedi: ' + msg(e))); }
 }
 function shell() {
-  const names = ['Genel Bakış', 'Analitik', 'İçerik', 'Medya', 'Yıldızlar', 'Kullanıcılar', 'Ayarlar', 'Denetim', 'Güvenlik'].filter(n => VIEWS[n] && (!NEEDS[n] || S.perms.includes(NEEDS[n])));
+  const names = ['Genel Bakış', 'Analitik', 'İçerik', 'Medya', 'Yıldızlar', 'Mesajlar', 'Kullanıcılar', 'Ayarlar', 'Denetim', 'Güvenlik'].filter(n => VIEWS[n] && (!NEEDS[n] || S.perms.includes(NEEDS[n])));
   app.replaceChildren(h('div', { class: 'shell' }, h('nav', { 'aria-label': 'Bölümler' }, h('h1', {}, 'NOVA'), names.map(n => h('button', { 'data-v': n, onclick: () => show(n) }, n)),
     h('p', { class: 'mut mono' }, S.me.username + ' · ' + S.me.role), h('a', { href: '/', target: '_blank', rel: 'noopener', class: 'mut' }, 'Siteyi aç ↗'), h('br'), h('button', { onclick: async () => { try { await api('/logout', { method: 'POST', body: {} }); } catch {} S.csrf = ''; login(); } }, 'ÇIKIŞ')), h('main', { id: 'main' })));
-  show(names[0]);
+  show(names[0]); if (typeof badges === 'function') badges();
 }
 
 VIEWS['Genel Bakış'] = async el => {
