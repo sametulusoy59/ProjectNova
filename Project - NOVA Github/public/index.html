@@ -264,6 +264,15 @@ h2{letter-spacing:-.01em}
 @keyframes holoFlick{0%,100%{opacity:1}47%{opacity:1}48%{opacity:.82}49%{opacity:1}74%{opacity:.94}75%{opacity:1}}
 @keyframes holoPulse{0%,100%{opacity:.85}50%{opacity:1}}
 @keyframes holoBlink{50%{opacity:.2}}
+.holo-stage{touch-action:manipulation}
+.holo-stage.zoomed{overflow:auto;place-items:start;cursor:grab;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(0,217,255,.5) transparent;border:1px solid rgba(0,217,255,.18);background:rgba(2,8,18,.35)}
+.holo-stage.zoomed.drag{cursor:grabbing;user-select:none}
+.holo-stage.zoomed .holo-doc{transform:none;margin:auto;transition:none}
+.holo-stage.zoomed .holo-doc canvas{max-width:none;max-height:none;filter:drop-shadow(0 0 1.5px rgba(0,217,255,.55));animation:none}
+.holo-stage.zoomed .holo-doc::before{opacity:.3}.holo-stage.zoomed .holo-doc::after{opacity:.4}
+.holo-stage.zoomed .holo-cone,.holo-stage.zoomed .holo-base,.holo-stage.zoomed .holo-frame{display:none}
+.holo:has(.holo-stage.zoomed){width:min(980px,96vw)}
+.holo-hint{font:400 .64rem var(--mono);letter-spacing:.14em;color:var(--mut);margin-top:.7rem;text-align:center;text-transform:uppercase}
 @media(prefers-reduced-motion:reduce){.holo-doc,.holo-doc canvas,.holo-doc::after,.holo-base,.holo-bar i{animation:none!important;transition:none}}
 </style>
 <!--NOVA_HEAD-->
@@ -348,45 +357,65 @@ function contactHTML(c){   // only configured links are shown (no "not configure
 }
 
 /* ===== HOLOGRAPHIC CV VIEWER: the PDF is rendered with self-hosted pdf.js and re-lit as a cyan hologram ===== */
-const CVH={el:null,doc:null,page:1,url:'',ret:null,tok:0};
+const CVH={el:null,doc:null,page:1,url:'',ret:null,tok:0,zoom:1,img:null,total:1};
+const ZOOMS=[1,1.5,2,2.75,3.5];
 function cvhBuild(){
  const el=document.createElement('div');el.id='cvh';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-labelledby','cvhT');
  el.innerHTML=`<div class="cvh-bg"></div><div class="holo"><div class="holo-bar"><i></i><span id="cvhT"></span><button type="button" id="cvhX"></button></div>
   <div class="holo-stage" id="cvhStage"><div class="holo-cone"></div><div class="holo-base"></div><div class="holo-doc" id="cvhDoc"><div class="holo-frame"></div></div></div>
   <div class="holo-acts"><button type="button" id="cvhP" aria-label="‹">‹</button><span class="pg" id="cvhPg"></span><button type="button" id="cvhN" aria-label="›">›</button>
-  <a id="cvhD" download>${IC.dl}<span></span></a></div></div>`;
+  <button type="button" id="cvhZo">−</button><span class="pg" id="cvhZ">100%</span><button type="button" id="cvhZi">+</button>
+  <a id="cvhD" download>${IC.dl}<span></span></a></div><p class="holo-hint" id="cvhH"></p></div>`;
  document.body.appendChild(el);CVH.el=el;
  el.querySelector('.cvh-bg').onclick=cvhClose;$('#cvhX').onclick=cvhClose;
  $('#cvhP').onclick=()=>cvhGo(CVH.page-1);$('#cvhN').onclick=()=>cvhGo(CVH.page+1);
- document.addEventListener('keydown',e=>{if(!el.classList.contains('on'))return;if(e.key==='Escape'){e.preventDefault();cvhClose()}else if(e.key==='ArrowLeft')cvhGo(CVH.page-1);else if(e.key==='ArrowRight')cvhGo(CVH.page+1);
+ $('#cvhZi').onclick=()=>cvhZoom(ZOOMS.find(z=>z>CVH.zoom+.01)||CVH.zoom);$('#cvhZo').onclick=()=>cvhZoom([...ZOOMS].reverse().find(z=>z<CVH.zoom-.01)||1);
+ document.addEventListener('keydown',e=>{if(!el.classList.contains('on'))return;if(e.key==='Escape'){e.preventDefault();cvhClose()}else if(e.key==='+'||e.key==='=')$('#cvhZi').click();else if(e.key==='-'||e.key==='_')$('#cvhZo').click();else if(e.key==='0')cvhZoom(1);
+  else if(CVH.zoom===1&&e.key==='ArrowLeft')cvhGo(CVH.page-1);else if(CVH.zoom===1&&e.key==='ArrowRight')cvhGo(CVH.page+1);
   else if(e.key==='Tab'){const f=[...el.querySelectorAll('button:not(:disabled),a[href]')];if(!f.length)return;const a=f[0],z=f[f.length-1];if(e.shiftKey&&document.activeElement===a){e.preventDefault();z.focus()}else if(!e.shiftKey&&document.activeElement===z){e.preventDefault();a.focus()}}});
  const st=$('#cvhStage'),doc=$('#cvhDoc');
- st.addEventListener('pointermove',e=>{if(RM||e.pointerType!=='mouse')return;const r=st.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;doc.style.setProperty('--ry',(x*16).toFixed(2)+'deg');doc.style.setProperty('--rx',(-y*10).toFixed(2)+'deg')});
+ st.addEventListener('pointermove',e=>{if(RM||e.pointerType!=='mouse'||CVH.zoom>1)return;const r=st.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;doc.style.setProperty('--ry',(x*16).toFixed(2)+'deg');doc.style.setProperty('--rx',(-y*10).toFixed(2)+'deg')});
  st.addEventListener('pointerleave',()=>{doc.style.setProperty('--ry','0deg');doc.style.setProperty('--rx','0deg')});
+ doc.addEventListener('dblclick',e=>{e.preventDefault();cvhZoom(CVH.zoom>1?1:2,e)});
+ let pan=null;st.addEventListener('pointerdown',e=>{if(CVH.zoom===1||e.pointerType!=='mouse'||e.button)return;pan={x:e.clientX,y:e.clientY,l:st.scrollLeft,t:st.scrollTop};st.classList.add('drag')});
+ addEventListener('pointermove',e=>{if(!pan)return;st.scrollLeft=pan.l-(e.clientX-pan.x);st.scrollTop=pan.t-(e.clientY-pan.y)});
+ addEventListener('pointerup',()=>{if(pan){pan=null;st.classList.remove('drag')}});
 }
-function cvhText(){const tr=lang==='tr';$('#cvhT').textContent=(tr?'ÖZGEÇMİŞ // ':'PERSONNEL FILE // ')+DATA.profile.name;$('#cvhX').textContent=tr?'KAPAT [ESC]':'CLOSE [ESC]';$('#cvhD span').textContent=tr?'PDF olarak indir':'Download PDF'}
+function cvhText(){const tr=lang==='tr';$('#cvhT').textContent=(tr?'ÖZGEÇMİŞ // ':'PERSONNEL FILE // ')+DATA.profile.name;$('#cvhX').textContent=tr?'KAPAT [ESC]':'CLOSE [ESC]';$('#cvhD span').textContent=tr?'PDF olarak indir':'Download PDF';
+ $('#cvhZi').setAttribute('aria-label',tr?'Yakınlaştır':'Zoom in');$('#cvhZo').setAttribute('aria-label',tr?'Uzaklaştır':'Zoom out');
+ const touch=matchMedia('(pointer:coarse)').matches;$('#cvhH').textContent=tr?(touch?'Okumak için yakınlaştır: + / − ya da sayfaya çift dokun':'Okumak için yakınlaştır: + / − ya da sayfaya çift tıkla'):(touch?'Zoom in to read: + / − or double-tap the page':'Zoom in to read: + / − or double-click the page')}
 function cvhMsg(t){const d=$('#cvhDoc');d.querySelectorAll('canvas,.holo-msg').forEach(n=>n.remove());const p=document.createElement('p');p.className='holo-msg';p.textContent=t;d.appendChild(p)}
 function cvLocal(h){   // same-origin PDF / image -> hologram; anything else (Drive, external sites) keeps the normal link
  let u;try{u=new URL(h||'',location.href)}catch(e){return null}
  const host=x=>x.replace(/^www\./,'');if(host(u.host)!==host(location.host))return null;
  const path=u.pathname+u.search;if(/\.pdf$/i.test(u.pathname))return{url:path,kind:'pdf'};if(/\.(png|jpe?g|webp)$/i.test(u.pathname))return{url:path,kind:'img'};return null}
 function holoify(cv){const cx=cv.getContext('2d',{willReadFrequently:true}),im=cx.getImageData(0,0,cv.width,cv.height),p=im.data;   // paper -> transparent, ink -> glowing cyan/ice light
- for(let i=0;i<p.length;i+=4){const l=(.299*p[i]+.587*p[i+1]+.114*p[i+2])/255;let k=Math.min(1,(1-l)*1.5);const w=k*k;
+ for(let i=0;i<p.length;i+=4){const l=(.299*p[i]+.587*p[i+1]+.114*p[i+2])/255;let k=Math.min(1,(1-l)*1.8);const w=k*k;
   p[i]=Math.round(40+215*w);p[i+1]=Math.round(200+55*w);p[i+2]=255;p[i+3]=Math.round((18+237*k)*(p[i+3]/255))}
  cx.putImageData(im,0,0)}
-function cvhShow(cv,n,total){const doc=$('#cvhDoc');doc.querySelectorAll('canvas,.holo-msg').forEach(x=>x.remove());doc.appendChild(cv);
- if(!RM){doc.classList.remove('in');void doc.offsetWidth;doc.classList.add('in')}
+function cvhScale(w,h){const st=$('#cvhStage'),fit=Math.min((st.clientHeight*.94)/h,(st.clientWidth*.94)/w),css=fit*CVH.zoom;
+ let dpr=Math.min(3,Math.max(2,devicePixelRatio||1));while(w*css*dpr*h*css*dpr>14e6&&dpr>.6)dpr*=.85;return{css,dpr}}
+function cvhCanvas(w,h,sc){const cv=document.createElement('canvas');cv.width=Math.max(1,Math.floor(w*sc.css*sc.dpr));cv.height=Math.max(1,Math.floor(h*sc.css*sc.dpr));
+ cv.style.width=Math.floor(w*sc.css)+'px';cv.style.height=Math.floor(h*sc.css)+'px';return cv}
+function cvhShow(cv,n,total,anim=true){const doc=$('#cvhDoc');doc.querySelectorAll('canvas,.holo-msg').forEach(x=>x.remove());doc.appendChild(cv);CVH.total=total;
+ $('#cvhZ').textContent=Math.round(CVH.zoom*100)+'%';$('#cvhZo').disabled=CVH.zoom<=1;$('#cvhZi').disabled=CVH.zoom>=ZOOMS[ZOOMS.length-1];
+ if(anim&&!RM){doc.classList.remove('in');void doc.offsetWidth;doc.classList.add('in')}
  $('#cvhPg').textContent=String(n).padStart(2,'0')+' / '+String(total).padStart(2,'0');$('#cvhP').disabled=n<=1;$('#cvhN').disabled=n>=total;
  [$('#cvhP'),$('#cvhN'),$('#cvhPg')].forEach(x=>x.style.display=total>1?'':'none')}
-async function cvhImage(url,tok){const img=new Image();img.decoding='async';img.src=url;await img.decode();if(tok!==CVH.tok)return;
- const st=$('#cvhStage'),fit=Math.min((st.clientHeight*.94)/img.naturalHeight,(st.clientWidth*.94)/img.naturalWidth),dpr=Math.min(devicePixelRatio||1,2);
- const cv=document.createElement('canvas');cv.width=Math.max(1,Math.floor(img.naturalWidth*fit*dpr));cv.height=Math.max(1,Math.floor(img.naturalHeight*fit*dpr));cv.style.width=Math.floor(cv.width/dpr)+'px';cv.style.height=Math.floor(cv.height/dpr)+'px';
+async function cvhImage(url,tok){const img=new Image();img.decoding='async';img.src=url;await img.decode();if(tok!==CVH.tok)return;CVH.img=img;CVH.doc=null;cvhImageDraw(true)}
+function cvhImageDraw(anim){const img=CVH.img,sc=cvhScale(img.naturalWidth,img.naturalHeight),cv=cvhCanvas(img.naturalWidth,img.naturalHeight,sc);
  cv.setAttribute('role','img');cv.setAttribute('aria-label',lang==='tr'?'Özgeçmiş':'Résumé');
- const cx=cv.getContext('2d',{willReadFrequently:true});cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(img,0,0,cv.width,cv.height);holoify(cv);CVH.doc=null;cvhShow(cv,1,1)}
-async function openCv(url,kind='pdf'){let stage='';
+ const cx=cv.getContext('2d',{willReadFrequently:true});cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(img,0,0,cv.width,cv.height);holoify(cv);cvhShow(cv,1,1,anim)}
+async function cvhZoom(z,ev){z=Math.max(1,Math.min(ZOOMS[ZOOMS.length-1],z));if(z===CVH.zoom)return;const st=$('#cvhStage');
+ let fx=.5,fy=.5;if(st.scrollWidth>st.clientWidth||st.scrollHeight>st.clientHeight){fx=(st.scrollLeft+st.clientWidth/2)/st.scrollWidth;fy=(st.scrollTop+st.clientHeight/2)/st.scrollHeight}
+ if(ev&&ev.target&&ev.target.tagName==='CANVAS'){const r=ev.target.getBoundingClientRect();fx=(ev.clientX-r.left)/r.width;fy=(ev.clientY-r.top)/r.height}
+ CVH.zoom=z;st.classList.toggle('zoomed',z>1);$('#cvhDoc').style.setProperty('--rx','0deg');$('#cvhDoc').style.setProperty('--ry','0deg');
+ if(CVH.doc)await cvhGo(CVH.page,true,false);else if(CVH.img)cvhImageDraw(false);
+ requestAnimationFrame(()=>{st.scrollLeft=fx*st.scrollWidth-st.clientWidth/2;st.scrollTop=fy*st.scrollHeight-st.clientHeight/2})}
+async function openCv(url,kind='pdf'){let stage='';CVH.zoom=1;CVH.img=null;
  if(!CVH.el)cvhBuild();cvhText();CVH.url=url;CVH.ret=document.activeElement;const tok=++CVH.tok;
  $('#cvhD').href=url;$('#cvhPg').textContent='';$('#cvhP').disabled=$('#cvhN').disabled=true;
- CVH.el.classList.add('on');document.documentElement.style.overflow='hidden';$('#cvhX').focus();
+ $('#cvhStage').classList.remove('zoomed');CVH.el.classList.add('on');document.documentElement.style.overflow='hidden';$('#cvhX').focus();
  cvhMsg(lang==='tr'?'HOLOGRAM YÜKLENİYOR…':'PROJECTING HOLOGRAM…');try{Snd.ui(1)}catch(e){}
  try{
   if(kind==='img'){await cvhImage(url,tok);return}
@@ -401,14 +430,13 @@ async function openCv(url,kind='pdf'){let stage='';
  }catch(e){console.error('[nova] CV hologram:',e);if(tok===CVH.tok){const code=e&&e.code?e.code:(stage+'-'+((e&&e.name)||'ERR'));
   cvhMsg((lang==='tr'?'Önizleme gösterilemedi — dosyayı yine de indirebilirsin.':'Preview unavailable — you can still download the file.')+`  [${String(code).slice(0,24)}${e&&e.message?' · '+String(e.message).slice(0,60):''}]`)}}
 }
-async function cvhGo(n,first){
+async function cvhGo(n,first,anim=true){
  const d=CVH.doc;if(!d||n<1||n>d.numPages||(n===CVH.page&&!first))return;CVH.page=n;const tok=CVH.tok;
  const page=await d.getPage(n),st=$('#cvhStage'),base=page.getViewport({scale:1});
- const fit=Math.min((st.clientHeight*.94)/base.height,(st.clientWidth*.94)/base.width),dpr=Math.min(devicePixelRatio||1,2),vp=page.getViewport({scale:fit*dpr});
- const cv=document.createElement('canvas');cv.width=Math.floor(vp.width);cv.height=Math.floor(vp.height);cv.style.width=Math.floor(vp.width/dpr)+'px';cv.style.height=Math.floor(vp.height/dpr)+'px';
+ const sc=cvhScale(base.width,base.height),vp=page.getViewport({scale:sc.css*sc.dpr}),cv=cvhCanvas(base.width,base.height,sc);
  cv.setAttribute('role','img');cv.setAttribute('aria-label',(lang==='tr'?'Özgeçmiş, sayfa ':'Résumé, page ')+n);
  const cx=cv.getContext('2d',{willReadFrequently:true});await page.render({canvasContext:cx,viewport:vp}).promise;if(tok!==CVH.tok)return;
- holoify(cv);cvhShow(cv,n,d.numPages);
+ holoify(cv);cvhShow(cv,n,d.numPages,anim);if(anim)$('#cvhStage').scrollTo(0,0);
 }
 function cvhClose(){if(!CVH.el||!CVH.el.classList.contains('on'))return;CVH.tok++;CVH.el.classList.remove('on');document.documentElement.style.overflow='';try{Snd.ui(0)}catch(e){}if(CVH.ret&&CVH.ret.focus)CVH.ret.focus({preventScroll:true})}
 
