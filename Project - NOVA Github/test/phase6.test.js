@@ -68,7 +68,7 @@ test('visitor stars can be switched off from the theme; sky location is clamped'
 });
 
 test('site: sky, constellation, visitor-star form, terminal and camera journey are wired in', () => {
-  for (const s of ['id="sky"', 'id="starForm"', 'id="cli"', 'id="cliBtn"', 'function skyNow(', 'const CAT=', 'function bhPull(', 'Snd.update(', "fetch('/api/stars'", 'KVKK', 'id="msgForm"', 'function skillMap(', 'function orbitTl(', 'const QUICK=', 'const HOLD=', 'id="chap"', 'uLens', 'const debris=', 'function caseHTML(', 'const ACH=']) assert.ok(INDEX.includes(s), s);
+  for (const s of ['id="sky"', 'id="starForm"', 'id="cli"', 'id="cliBtn"', 'function skyNow(', 'const CAT=', 'function bhPull(', 'Snd.update(', "fetch('/api/stars'", 'KVKK', 'id="msgForm"', 'function skillMap(', 'function orbitTl(', 'const QUICK=', 'const HOLD=', 'id="chap"', 'uLens', 'const debris=', 'function caseHTML(', 'const ACH=', 'const GX=', 'id="stars"']) assert.ok(INDEX.includes(s), s);
 });
 
 test('contact messages: validated, rate-limited, private to admins; owner gets an SMTP notification', async () => {
