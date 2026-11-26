@@ -629,8 +629,9 @@ function openP(i,from){const j=DATA.projects[i];const d=$('#dlg');
  if(from&&!RM){const cr=from.getBoundingClientRect(),dr=d.getBoundingClientRect();gsap.fromTo(d,{x:cr.left-dr.left,y:cr.top-dr.top,scaleX:cr.width/dr.width,scaleY:cr.height/dr.height,transformOrigin:'0 0',opacity:.2},{x:0,y:0,scaleX:1,scaleY:1,opacity:1,duration:.55,ease:'power3.out',clearProps:'transform,opacity'})}}
 $('#dlg').addEventListener('click',e=>{if(e.target===e.currentTarget)closeP()});$('#dlg').addEventListener('cancel',e=>{e.preventDefault();closeP()});
 function decode(el){   // leaf text only; stops if render() replaces the text (language switch)
- if(RM||!el||el.children.length)return;const fin=el.textContent;if(!fin.trim())return;const G='▓▒░<>/\\_=+*#01ABCDEFXYZ';let f=0,last='';
- const tot=Math.min(26,8+fin.length);(function step(){if(last&&el.textContent!==last)return;f++;const k=Math.floor(fin.length*f/tot);
+ if(RM||!el||el.children.length)return;const fin=el.dataset.i?X(el.dataset.i):el.textContent;if(typeof fin!=='string'||!fin.trim())return;   // final text comes from the dictionary, never from a half-scrambled screen
+ const tok=el._dec=(el._dec||0)+1,G='▓▒░<>/\\_=+*#01ABCDEFXYZ';let f=0,last='';
+ const tot=Math.min(26,8+fin.length);(function step(){if(el._dec!==tok)return;if(last&&el.textContent!==last){el._dec++;return}f++;const k=Math.floor(fin.length*f/tot);
   last=fin.slice(0,k)+[...fin.slice(k)].map(ch=>ch===' '?' ':G[(Math.random()*G.length)|0]).join('');if(f>=tot){el.textContent=fin;return}el.textContent=last;requestAnimationFrame(step)})()}
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);
  [...(e.target.matches('h2,.q,.lab')?[e.target]:[]),...e.target.querySelectorAll('.lab [data-i],h2[data-i]')].forEach(x=>x.matches('.lab')?x.querySelectorAll('[data-i]').forEach(decode):decode(x))}}),{threshold:.12});
