@@ -34,7 +34,7 @@ test('visitor stars: submissions need consent + same origin, are sanitised, stay
   const ok = await star({ name: '  Ayşe‮ <b>Yılmaz</b>  ', msg: 'Merhaba\nevren!', hue: 42 }, '10.0.0.2'); assert.equal(ok.status, 202); assert.equal(ok.json.status, 'pending');
   const rows = app.db.prepare('SELECT * FROM stars').all(); assert.equal(rows.length, 1, 'honeypot stored nothing');
   assert.equal(rows[0].name, 'Ayşe bYılmaz/b', 'bidi override and angle brackets removed'); assert.equal(rows[0].msg, 'Merhaba evren!'); assert.equal(rows[0].hue, 42);
-  assert.deepEqual(Object.keys(rows[0]).sort(), ['decided_at', 'decided_by', 'hue', 'id', 'msg', 'name', 'status', 'ts'], 'no ip / ua column exists');
+  assert.deepEqual(Object.keys(rows[0]).sort(), ['decided_at', 'decided_by', 'hue', 'id', 'link', 'msg', 'name', 'status', 'ts'], 'no ip / ua column exists');
   assert.deepEqual((await call('GET', '/api/stars', undefined, { cookie: '' })).json, [], 'pending stars are not public');
 });
 
@@ -55,7 +55,7 @@ test('visitor stars: moderation is RBAC + CSRF protected and audited; approved s
   const del = list.find(r => r.name === 'Rate 1').id; assert.equal((await call('DELETE', `/api/admin/stars/${del}`)).status, 200);
   assert.equal((await call('POST', '/api/admin/stars/999999/approve', {})).status, 404);
   const pub = (await call('GET', '/api/stars', undefined, { cookie: '' })).json;
-  assert.equal(pub.length, 1); assert.deepEqual(Object.keys(pub[0]).sort(), ['day', 'hue', 'id', 'msg', 'name']); assert.equal(pub[0].msg, 'Merhaba evren!');
+  assert.equal(pub.length, 1); assert.deepEqual(Object.keys(pub[0]).sort(), ['day', 'hue', 'id', 'link', 'msg', 'name']); assert.equal(pub[0].msg, 'Merhaba evren!');
   const acts = app.db.prepare("SELECT action,actor FROM audit WHERE action LIKE 'star_%' ORDER BY id").all().map(r => r.action + ':' + r.actor);
   assert.deepEqual(acts, ['star_approve:editor', 'star_reject:owner', 'star_delete:owner']);
 });
@@ -68,7 +68,7 @@ test('visitor stars can be switched off from the theme; sky location is clamped'
 });
 
 test('site: sky, constellation, visitor-star form, terminal and camera journey are wired in', () => {
-  for (const s of ['id="sky"', 'id="starForm"', 'id="cli"', 'id="cliBtn"', 'function skyNow(', 'const CAT=', 'function bhPull(', 'Snd.update(', "fetch('/api/stars'", 'KVKK', 'id="msgForm"', 'function skillMap(', 'function orbitTl(', 'const QUICK=', 'const HOLD=', 'id="chap"', 'uLens', 'const debris=', 'function caseHTML(', 'const ACH=', 'const GX=', 'id="stars"']) assert.ok(INDEX.includes(s), s);
+  for (const s of ['id="sky"', 'id="starForm"', 'id="cli"', 'id="cliBtn"', 'function skyNow(', 'const CAT=', 'function bhPull(', 'Snd.update(', "fetch('/api/stars'", 'KVKK', 'id="msgForm"', 'function spectrum(', 'function orbitTl(', 'const QUICK=', 'const HOLD=', 'id="chap"', 'uLens', 'const debris=', 'function caseHTML(', 'const ACH=', 'const GX=', 'id="stars"']) assert.ok(INDEX.includes(s), s);
 });
 
 test('contact messages: validated, rate-limited, private to admins; owner gets an SMTP notification', async () => {
@@ -116,4 +116,21 @@ test('SEO: published content is embedded in the HTML, /en has its own language, 
   try { const pg = await (await fetch(b3 + '/')).text(); assert.ok(pg.includes('src="/assets/vendor/gsap.min.js"')); assert.ok(pg.includes('three.js/r128/three.min.js'), 'missing files keep the CDN'); }
   finally { fs.rmSync(f); try { fs.rmdirSync(vdir); } catch {} }
   a3.close();
+});
+
+test('visitor constellations: a new star may link only to an approved star; live traveller count is memory-only', async () => {
+  const pub = (await call('GET', '/api/stars', undefined, { cookie: '' })).json; const target = pub[0] ? pub[0].id : null;
+  await call('PUT', '/api/admin/content/theme', { body: { visitorStars: true } }); await call('POST', '/api/admin/content/theme/publish', {});
+  const tgt = app.db.prepare("SELECT id FROM stars WHERE status='approved'").get().id, pend = app.db.prepare("SELECT id FROM stars WHERE status='pending'").get().id;
+  assert.equal((await star({ name: 'Bağlı', link: tgt }, '10.4.4.1')).status, 202);
+  assert.equal((await star({ name: 'Bağsız', link: pend }, '10.4.4.2')).status, 202);
+  assert.equal((await star({ name: 'Garip', link: 'DROP TABLE' }, '10.4.4.3')).status, 202);
+  const rows = Object.fromEntries(app.db.prepare("SELECT name,link FROM stars WHERE name IN ('Bağlı','Bağsız','Garip')").all().map(r => [r.name, r.link]));
+  assert.deepEqual(rows, { 'Bağlı': tgt, 'Bağsız': null, 'Garip': null });
+  const pres = (id, o = base) => fetch(base + '/api/presence', { method: 'POST', headers: { 'content-type': 'application/json', origin: o }, body: JSON.stringify({ id }) }).then(async r => ({ status: r.status, json: await r.json() }));
+  assert.equal((await pres('abcdef0123456789', 'https://evil.example')).status, 403);
+  assert.equal((await pres('not hex')).status, 422);
+  assert.equal((await pres('abcdef0123456789')).json.n, 1); assert.equal((await pres('0123456789abcdef')).json.n, 2); assert.equal((await pres('abcdef0123456789')).json.n, 2, 'same tab counted once');
+  assert.ok(!app.db.prepare("SELECT name FROM sqlite_master WHERE sql LIKE '%presence%'").get(), 'nothing persisted');
+  void target;
 });

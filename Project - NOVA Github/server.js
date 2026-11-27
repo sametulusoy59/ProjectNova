@@ -71,6 +71,7 @@ function createApp(opts = {}) {
   }
   const byUser = new S.Limiter(5, 15 * 60e3), byIp = new S.Limiter(20, 15 * 60e3), collectLim = new S.Limiter(120, 60e3), apiLim = new S.Limiter(600, 60e3), starLim = new S.Limiter(3, 60 * 60e3), starDay = new S.Limiter(40, 24 * 3600e3), msgLim = new S.Limiter(3, 60 * 60e3), msgDay = new S.Limiter(60, 24 * 3600e3);
   const MAIL = mail.config(cfg.env || process.env);
+  const presence = new Map(), presLim = new S.Limiter(30, 60e3);   // live traveller count: random per-tab ids, memory only, forgotten after 70 s
   const notify = (subject, text, replyTo) => { if (!MAIL.ok || cfg.quiet && !cfg.mailInTests) return; mail.send(MAIL, { subject, text, replyTo }).catch(e => console.error('[nova] notification e-mail failed:', e.message)); };
   const audit = (actor, action, resource, outcome, detail) => S.auditLog(db, actor, action, resource, outcome, detail);
   const now = () => Date.now();
@@ -342,9 +343,18 @@ function createApp(opts = {}) {
         return json(res, 200, out, { 'cache-control': 'public, max-age=30' });
       }
       // ---- visitor stars: public submit (moderated), public list (approved only), admin moderation ----------------
+      if (p === '/api/presence' && m === 'POST') {
+        if (!req.headers.origin || !sameOrigin(req)) return json(res, 403, { error: 'bad_origin' });
+        const b = await body(req, 256), t = now();
+        if (typeof b.id !== 'string' || !/^[a-f0-9]{16,32}$/.test(b.id)) return json(res, 422, { error: 'bad_id' });
+        if (!presLim.hit(ipHash(req))) return json(res, 429, { error: 'rate_limited' });
+        for (const [k, v] of presence) if (t - v > 70e3) presence.delete(k);
+        if (b.leave) presence.delete(b.id); else if (presence.size < 5000 || presence.has(b.id)) presence.set(b.id, t);
+        return json(res, 200, { n: Math.max(b.leave ? 0 : 1, presence.size) }, { 'cache-control': 'no-store' });
+      }
       if (p === '/api/stars' && m === 'GET') {
         if (getRow('theme', false)?.visitorStars === false) return json(res, 200, [], { 'cache-control': 'public, max-age=60' });
-        return json(res, 200, q("SELECT id,name,msg,hue,strftime('%Y-%m-%d',ts/1000,'unixepoch') day FROM stars WHERE status='approved' ORDER BY id DESC LIMIT 300"), { 'cache-control': 'public, max-age=60' });
+        return json(res, 200, q("SELECT id,name,msg,hue,link,strftime('%Y-%m-%d',ts/1000,'unixepoch') day FROM stars WHERE status='approved' ORDER BY id DESC LIMIT 300"), { 'cache-control': 'public, max-age=60' });
       }
       if (p === '/api/stars' && m === 'POST') {
         if (!req.headers.origin || !sameOrigin(req)) return json(res, 403, { error: 'bad_origin' });   // browsers always send Origin on a POST fetch
@@ -358,14 +368,15 @@ function createApp(opts = {}) {
         if (/(https?:|www\.|\.(com|net|org|io|ru|xyz|top)\b|@)/i.test(name + ' ' + text)) return json(res, 422, { error: 'no_links' });
         if (!starLim.hit(ipHash(req)) || !starDay.hit('all')) return json(res, 429, { error: 'rate_limited' });
         if ((one("SELECT COUNT(*) n FROM stars WHERE status='pending'") || {}).n >= 500) return json(res, 429, { error: 'queue_full' });
-        run('INSERT INTO stars(ts,name,msg,hue) VALUES(?,?,?,?)', now(), name, text, hue);   // no IP, no cookie, no e-mail is stored with a star
+        const link = Number.isInteger(b.link) && one("SELECT id FROM stars WHERE id=? AND status='approved'", b.link) ? b.link : null;   // may only connect to a star already in the sky
+        run('INSERT INTO stars(ts,name,msg,hue,link) VALUES(?,?,?,?,?)', now(), name, text, hue, link);   // no IP, no cookie, no e-mail is stored with a star
         notify('NOVA · yeni yıldız onay bekliyor', `${name}${text ? ' — ' + text : ''}\n\nOnaylamak için: ${(cfg.origin || '').replace(/\/$/, '')}/admin/  →  Yıldızlar`);
         return json(res, 202, { ok: true, status: 'pending' });
       }
       if (p === '/api/admin/stars' && m === 'GET') {
         const s = guard(req, res, 'content'); if (!s) return;
         run("DELETE FROM stars WHERE status='rejected' AND decided_at<?", now() - 30 * 864e5);   // rejected submissions are kept 30 days at most
-        return json(res, 200, q("SELECT id,ts,name,msg,hue,status,decided_by,decided_at FROM stars ORDER BY status='pending' DESC, id DESC LIMIT 500"));
+        return json(res, 200, q("SELECT s.id,s.ts,s.name,s.msg,s.hue,s.status,s.decided_by,s.decided_at,s.link,t.name link_name FROM stars s LEFT JOIN stars t ON t.id=s.link ORDER BY s.status='pending' DESC, s.id DESC LIMIT 500"));
       }
       const sm = /^\/api\/admin\/stars\/(\d{1,9})(?:\/(approve|reject))?$/.exec(p);
       if (sm) {

@@ -38,6 +38,7 @@ function open(dir) {
   `);
   const cols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
   for (const [c, d] of [['totp', 'TEXT'], ['totp_on', 'INTEGER NOT NULL DEFAULT 0'], ['totp_last', 'INTEGER NOT NULL DEFAULT 0'], ['recovery', 'TEXT']]) if (!cols.includes(c)) db.exec(`ALTER TABLE users ADD COLUMN ${c} ${d}`);
+  if (!db.prepare('PRAGMA table_info(stars)').all().some(r => r.name === 'link')) db.exec('ALTER TABLE stars ADD COLUMN link INTEGER');   // visitor constellations
   return db;
 }
 module.exports = { open };

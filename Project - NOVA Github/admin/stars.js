@@ -9,7 +9,7 @@ VIEWS['Yıldızlar'] = async el => {
   } }, { approve: 'ONAYLA', reject: 'REDDET', delete: 'SİL' }[what]);
   el.append(h('h2', {}, 'Ziyaretçi yıldızları'),
     h('p', { class: 'mut' }, `Ziyaretçiler kapanış sahnesindeki gökyüzüne bir isim ve kısa bir not bırakabilir. Onaylamadığınız hiçbir şey sitede görünmez. ${pend.length} kayıt onay bekliyor. Yıldızla birlikte IP, çerez veya e-posta saklanmaz; reddedilenler 30 gün sonra kendiliğinden silinir. Özelliği "İçerik → Tema & 3D" bölümünden kapatabilirsiniz.`),
-    table(['Tarih', 'Renk', 'İsim', 'Not', 'Durum', ''], rows.map(r => [fmt(r.ts), h('span', { class: 'chip', style: `border-color:hsl(${r.hue} 100% 65%);color:hsl(${r.hue} 100% 70%)` }, '★'), r.name, r.msg || '—',
+    table(['Tarih', 'Renk', 'İsim', 'Not', 'Durum', ''], rows.map(r => [fmt(r.ts), h('span', { class: 'chip', style: `border-color:hsl(${r.hue} 100% 65%);color:hsl(${r.hue} 100% 70%)` }, '★'), r.name + (r.link_name ? ` → ${r.link_name}` : ''), r.msg || '—',
       h('span', { class: 'chip ' + lab[r.status][1] }, lab[r.status][0]),
       h('span', { class: 'row', style: 'margin:0;gap:.4rem' }, r.status !== 'approved' ? act(r, 'approve') : '', r.status === 'pending' ? act(r, 'reject') : '', act(r, 'delete'))])));
 };

@@ -51,9 +51,10 @@
         h('h3', {}, 'Vaka çalışması (isteğe bağlı)'), h('p', { class: 'mut' }, 'Doldurduğunuz alanlar proje penceresinde "Problem → Yaklaşım → Sonuç" akışı olarak görünür. Boş bırakılanlar gösterilmez.'),
         bi('Problem', p, 'problem', { area: 1, rows: 3 }), bi('Yaklaşım', p, 'approach', { area: 1, rows: 3 }), bi('Sonuç', p, 'result', { area: 1, rows: 3 }),
         f('Öne çıkan sayılar (satır başına bir, ör. "%40 daha hızlı")', p, 'metrics', { area: 1, rows: 3, list: 'lines' }),
+        biList('Seyir defteri (ör. "Gün 1 — Fikir doğdu"; boş bırakılırsa gösterilmez)', p, 'log'),
         h('div', { class: 'bi' }, f('Galeri görselleri (satır başına bir /media/... adresi)', p, 'gallery', { area: 1, rows: 3, list: 'lines' }), lab('Galeriye ekle', h('select', { onchange: e => { const r = media.find(x => x.file === e.target.value); if (r && !/\.pdf$/.test(r.file)) { p.gallery = [...(p.gallery || []), '/media/' + r.file].slice(0, 8); ctx.dirty(); redraw(); } e.target.value = ''; } }, h('option', { value: '' }, 'Medya kütüphanesinden seç…'), media.filter(r => !/\.pdf$/.test(r.file)).map(r => h('option', { value: r.file }, r.name))))),
         h('div', { class: 'row' }, lab('Örnek proje etiketi', inp(p, 'example', { type: 'checkbox' })), lab('Sitede gizle (taslak)', inp(p, 'hidden', { type: 'checkbox' }))));
-    }, () => ({ example: false, hidden: false, hue: 200, cat: { en: '', tr: '' }, title: { en: '', tr: '' }, desc: { en: '', tr: '' }, tech: [], live: '', code: '', image: '', imageAlt: '', problem: { en: '', tr: '' }, approach: { en: '', tr: '' }, result: { en: '', tr: '' }, metrics: [], gallery: [] }), 'proje')),
+    }, () => ({ example: false, hidden: false, hue: 200, cat: { en: '', tr: '' }, title: { en: '', tr: '' }, desc: { en: '', tr: '' }, tech: [], live: '', code: '', image: '', imageAlt: '', problem: { en: '', tr: '' }, approach: { en: '', tr: '' }, result: { en: '', tr: '' }, metrics: [], gallery: [], log: { tr: [], en: [] } }), 'proje')),
     skills: m => 0,
     experience: m => 0,
   };
